@@ -1,0 +1,78 @@
+\documentclass{article} % Document class: article, report, book, etc.
+\usepackage[utf8]{inputenc} % Input encoding: UTF-8
+\usepackage{lipsum} % For generating dummy text, you can remove this package in your actual document
+
+% Document information
+\title{BigDawsSSH - Project Proposal}
+\author{Kenta Yoshii}
+\date{\today} % Use \date{<date>} to set a specific date
+
+\begin{document}
+\maketitle % Generates the title
+
+\section{Overview} % Section
+For the final project of CS1515, I will attempt to implement \textbf{RFC-compliant Secure Shell Procotol (SSH)}. This will largely consists of three parts: \textbf{transport protocol}, \textbf{authentication protocol}, and \textbf{connection protocol}.
+\subsection{Protocols}
+\begin{enumerate}
+    \item \textbf{Transport Protocol}
+    
+    This protocol will provide a secure and confidential channel over an insecure network. Server host authentication, key exchange, encryption, and integrity protection are what mainly gets done in this part of the protocol. After this, \underline{a unique session id} will be generated to be used in later protocols. 
+    \item \textbf{Authentication Protocol}
+    
+    The authentication of client user to the server is done in this part of the protocol. The generated session id will be used here. The assumption is that it already has a authenticated server machine and an established, ecrypted communciation channel
+    \item \textbf{Connection Protocol}
+    
+    This protocol specifies a mechanism to multiplex multiple streams of data over the confidential and authenticated tranport.
+\end{enumerate}
+\subsection{Security}
+\begin{enumerate}
+    \item Confidentiality
+    
+    To assure confidentiality, I am going to use AES with CBC mode, which is a widely accepted mode of encryption in the group. To mitigate the risk of an attacker guessing the Initializatio Vector, I will be taking advantage of the \textbf{SSH\_MSG\_IGNORE}
+    \item Data Integrity
+    
+    We will use MAC to guarantee data integrity of packets being sent over the internet. We will also be using rekeying technique every 1GB to prevent from any information being gained by an attcker.
+
+    \item Man in the Middle
+    
+    Since the server host key is known to the client a priori and we use MAC scheme for data integrity, there is no risk of MitM attack.
+
+    \item User Authenticity
+    
+    To assure that we are interacting with a valid client host, we will be using Public Key Authentication. An alternative to this is using Password Authentication, but this is vulnerable to server's weak security.
+\end{enumerate}
+\section{Roadmap} 
+Here is the roadmap that resembles the hierarchical order of protocols, which is unsurprising.
+\begin{enumerate}
+    \item Implement Transport Protcol 
+    \begin{enumerate}
+        \item TCP connection establishement
+        \item Handshake 
+        \item Algorithm Negotiations and Key Exchange
+        \item Service Request(ssh-userauth, ssh-connection)
+        \item (Stretch) Key Re-Exchange
+        \item (Stretch) Support for more than one Cryptographic Algorithm for encryption
+    \end{enumerate}
+    \item Implement Client Authentication Protocol
+    \begin{enumerate}
+        \item Public Key based authentication of the client
+        \item (Stretch) Password based authentication of the client
+    \end{enumerate}
+    \item (Stretch) Implement Connection Protocol
+    \begin{enumerate}
+        \item Opening/Closing Channels
+        \item TCP/IP Forwarding
+    \end{enumerate}
+\end{enumerate}
+
+\section{Libraries / Language / Reference}
+\paragraph*{Language}
+Golang
+\paragraph*{Library}
+net/http, (more to be added as I see fit)
+\paragraph*{Reference}
+RFC4250, RFC4251, RFC4252(authentication), RFC4253(transport), RFC4254(connection)
+
+\end{document}
+
+
