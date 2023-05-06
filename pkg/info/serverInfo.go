@@ -3,6 +3,7 @@ package info
 import (
 	"net"
 	"sync"
+	protocol "ssh/pkg/protocol"
 )
 
 type ServerInfo struct {
@@ -22,6 +23,9 @@ type ServerInfo struct {
 	// Mutexes
 	ClientsMutex *sync.Mutex
 	ClientWg     *sync.WaitGroup
+
+	// Protocol
+	PVM *protocol.ProtocolVersionMessage
 }
 
 func CreateNewServerInfo(hostname string, port string, listenerConn *net.TCPListener) *ServerInfo {
@@ -35,5 +39,6 @@ func CreateNewServerInfo(hostname string, port string, listenerConn *net.TCPList
 		CmdChan:      make(chan []string),
 		ClientsMutex: &sync.Mutex{},
 		ClientWg:     &sync.WaitGroup{},
+		PVM:          protocol.CreateProtocolVersionMessage(),
 	}
 }

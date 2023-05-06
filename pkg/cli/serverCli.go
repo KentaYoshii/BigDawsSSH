@@ -88,7 +88,6 @@ func DoHelp(si *info.ServerInfo) error {
 	// Print the table footer
 	fmt.Println(padding + "+------------+--------------------------+")
 	fmt.Println()
-	fmt.Printf("> ")
 	return nil
 }
 
@@ -138,12 +137,10 @@ func DoList(si *info.ServerInfo) error {
 	// Print the table footer
 	fmt.Println(padding + "+-------+---------------------------+----------+")
 	fmt.Println()
-	fmt.Printf("> ")
 	return nil
 }
 
 func ParseCLI(cliChan chan []string) {
-	fmt.Printf("> ")
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		input := scanner.Text()
