@@ -6,12 +6,14 @@ import (
 	"os"
 	"strings"
 	info "ssh/pkg/info"
+	"github.com/fatih/color"
 )
 
 const (
 	HELP = iota
 	QUIT
 	LIST
+	CONNECT
 )
 
 func CmdToIndex(cmd string) int {
@@ -27,7 +29,7 @@ func CmdToIndex(cmd string) int {
 	}
 }
 
-type HandlerFn func(info.ServerInfo) error
+type HandlerFn func(*info.ServerInfo) error
 
 func GetHandler(cmdIdx int) HandlerFn {
 	switch cmdIdx {
@@ -44,37 +46,104 @@ func GetHandler(cmdIdx int) HandlerFn {
 
 // Handle the "help" command
 // Print all the commands and their descriptions 
-func DoHelp(si info.ServerInfo) error {
-	fmt.Printf("Supported commands for ssh server %s \n:", si.Hostname)
-    fmt.Printf("%-10s%s\n", "help", "Display this help message")
-    fmt.Printf("%-10s%s\n", "list", "List all items")
-    fmt.Printf("%-10s%s\n", "exit", "Exit the program")
+func DoHelp(si *info.ServerInfo) error {
+	// Define the colors for the table
+	headerColor := color.New(color.FgGreen, color.Bold)
+	commandColor := color.New(color.FgBlue)
+	descColor := color.New(color.FgWhite)
 
+	// Define the table width and spacing
+	tableWidth := 30
+	spacing := (80 - tableWidth) / 2
+
+	// Generate the padding string
+	padding := strings.Repeat(" ", spacing)
+
+	// Print the table header
+	fmt.Println()
+	headerColor.Println(padding + "Supported commands:")
+	fmt.Println(padding + "+------------+--------------------------+")
+	fmt.Println(padding + "| Command    | Description              |")
+	fmt.Println(padding + "+------------+--------------------------+")
+
+	// Print each command and description with color
+	commandColor.Printf(padding + "| ")
+	descColor.Printf("%-10s", "help")
+	fmt.Print(commandColor.Sprintf(" | "))
+	descColor.Printf("%-24s", "Display help message")
+	fmt.Println(commandColor.Sprintf(" |"))
+
+	commandColor.Printf(padding + "| ")
+	descColor.Printf("%-10s", "list")
+	fmt.Print(commandColor.Sprintf(" | "))
+	descColor.Printf("%-24s", "List all items")
+	fmt.Println(commandColor.Sprintf(" |"))
+
+	commandColor.Printf(padding + "| ")
+	descColor.Printf("%-10s", "quit")
+	fmt.Print(commandColor.Sprintf(" | "))
+	descColor.Printf("%-24s", "Exit the program")
+	fmt.Println(commandColor.Sprintf(" |"))
+
+	// Print the table footer
+	fmt.Println(padding + "+------------+--------------------------+")
+	fmt.Println()
+	fmt.Printf("> ")
 	return nil
 }
 
 // Handle the "quit" command
 // Send true to the CloseChan to signal the server to close
-func DoQuit(si info.ServerInfo) error {
+func DoQuit(si *info.ServerInfo) error {
 	si.CloseChan <- true
 	return nil
 }
 
 // Handle the "list" command
 // Print all the clients connected to the server
-func DoList(si info.ServerInfo) error {
+func DoList(si *info.ServerInfo) error {
 	// atomicity
 	si.ClientsMutex.Lock()
 	defer si.ClientsMutex.Unlock()
 
-	fmt.Println("Clients connected to server:")
-	for _, client := range si.Clients {
-		fmt.Println(client.Address)
+	// Define the colors for the table
+	headerColor := color.New(color.FgGreen, color.Bold)
+	idColor := color.New(color.FgWhite)
+	addrColor := color.New(color.FgWhite)
+	statusColor := color.New(color.FgWhite)
+
+	// Define the table width and spacing
+	tableWidth := 30
+	spacing := (80 - tableWidth) / 2
+
+	// Generate the padding string
+	padding := strings.Repeat(" ", spacing)
+
+	// Print the table header
+	headerColor.Println(padding + "Connected clients:")
+	fmt.Println(padding + "+-------+---------------------------+----------+")
+	fmt.Println(padding + "| ID    | Address                   | Status   |")
+	fmt.Println(padding + "+-------+---------------------------+----------+")
+
+	// Print each client information with color
+	for _, c := range si.Clients {
+		idColor.Printf(padding + "| %-5d ", c.ID)
+		fmt.Print(idColor.Sprintf("| "))
+		addrColor.Printf("%-25s", c.Address)
+		fmt.Print(addrColor.Sprintf(" | "))
+		statusColor.Printf("%-8d", c.Status)
+		fmt.Println(statusColor.Sprintf(" |"))
 	}
+
+	// Print the table footer
+	fmt.Println(padding + "+-------+---------------------------+----------+")
+	fmt.Println()
+	fmt.Printf("> ")
 	return nil
 }
 
 func ParseCLI(cliChan chan []string) {
+	fmt.Printf("> ")
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		input := scanner.Text()

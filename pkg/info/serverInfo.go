@@ -31,7 +31,9 @@ func CreateNewServerInfo(hostname string, port string, listenerConn *net.TCPList
 		ListenerConn: listenerConn,
 		NewID:        0,
 		Clients:      make([]*ClientInfo, 0),
-		CloseChan:    make(chan bool),
+		CloseChan:    make(chan bool, 1),
 		CmdChan:      make(chan []string),
+		ClientsMutex: &sync.Mutex{},
+		ClientWg:     &sync.WaitGroup{},
 	}
 }

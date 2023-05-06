@@ -5,6 +5,7 @@ import (
 )
 
 type ClientInfo struct {
+	// Server use
 	ID      int
 	Address string
 	Conn    *net.TCPConn

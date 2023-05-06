@@ -2,17 +2,19 @@ package main
 
 import (
 	"fmt"
+	"os"
 	// "ssh/pkg/protocol"
 	conn "ssh/pkg/connection"
 	cli "ssh/pkg/cli"
 	info "ssh/pkg/info"
 )
 
+// ./ssh_server <port>
 func main() {
 
 	// Set up listening socket
 	fmt.Println("Server Starting...")
-	port := "3000"
+	port := os.Args[1]
 	listener := conn.CreateNewListener(port)
 
 	// Set up ServerInfo Struct
@@ -31,18 +33,18 @@ func main() {
 			cmdIdx := cli.CmdToIndex(cmd[0])
 			if cmdIdx == -1 {
 				fmt.Println("Command not supported")
+				fmt.Printf("> ")
 				continue
 			}
 			handler := cli.GetHandler(cmdIdx)
-			handler(*serverInfo)
-			continue
-		case signal := <- serverInfo.CloseChan:
+			handler(serverInfo)
+		case signal := <-serverInfo.CloseChan:
 			if signal {
 				fmt.Println("Closing server...")
 				// TODO: Close all connections
 				return
 			}
-			continue
+			fmt.Printf("> ")
 		}
 	}
 }
