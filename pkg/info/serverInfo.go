@@ -2,8 +2,8 @@ package info
 
 import (
 	"net"
-	"sync"
 	protocol "ssh/pkg/protocol"
+	"sync"
 )
 
 type ServerInfo struct {
@@ -26,6 +26,17 @@ type ServerInfo struct {
 
 	// Protocol
 	PVM *protocol.ProtocolVersionMessage
+
+	// Name-Lists (comma-separated string)
+	// Supported algorithm on the ssh server in the order of preference
+	// The first in each of these is the "guessed" algorithm
+	kex_algorithms                         string
+	server_host_key_algorithms             string
+	encryption_algorithms_client_to_server string
+	encryption_algorithms_server_to_client string
+	mac_algorithms_client_to_server        string
+	mac_algorithms_server_to_client        string
+	first_kex_packet_follows               bool
 }
 
 func CreateNewServerInfo(hostname string, port string, listenerConn *net.TCPListener) *ServerInfo {

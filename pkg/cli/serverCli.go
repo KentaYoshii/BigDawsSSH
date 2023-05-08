@@ -49,7 +49,7 @@ func GetHandler(cmdIdx int) HandlerFn {
 func DoHelp(si *info.ServerInfo) error {
 	// Define the colors for the table
 	headerColor := color.New(color.FgGreen, color.Bold)
-	commandColor := color.New(color.FgBlue)
+	commandColor := color.New(color.FgWhite, color.Bold)
 	descColor := color.New(color.FgWhite)
 
 	// Define the table width and spacing
