@@ -4,7 +4,7 @@ import (
 	"net"
 )
 
-type ClientInfo struct {
+type ServerClientInfo struct {
 	// Server use
 	ID      int
 	Address string
@@ -12,8 +12,8 @@ type ClientInfo struct {
 	Status  int
 }
 
-func CreateNewClientInfo(id int, address string, conn *net.TCPConn) *ClientInfo {
-	return &ClientInfo{
+func CreateNewClientInfo(id int, address string, conn *net.TCPConn) *ServerClientInfo {
+	return &ServerClientInfo{
 		ID:      id,
 		Address: address,
 		Conn:    conn,

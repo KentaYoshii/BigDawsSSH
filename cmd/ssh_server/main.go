@@ -12,6 +12,11 @@ import (
 // ./ssh_server <port>
 func main() {
 
+	if len(os.Args) != 2 {
+		fmt.Println("Usage: ./ssh_server <port>")
+		os.Exit(1)
+	}
+
 	// Set up listening socket
 	fmt.Println("Server Starting...")
 	port := os.Args[1]
@@ -19,6 +24,9 @@ func main() {
 
 	// Set up ServerInfo Struct
 	serverInfo := info.CreateNewServerInfo("localhost", port, listener)
+
+	// Load DSA keys
+	info.LoadDSAKeys(serverInfo)
 
 	// Enter the accept loop
 	fmt.Println("Ready to accept connections...")

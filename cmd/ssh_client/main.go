@@ -4,13 +4,23 @@ import (
 	"fmt"
 	"os"
 	core "ssh/pkg/core"
+	info "ssh/pkg/info"
 )
 
-// ./ssh_client <s_address> <s_port> 
+
 func main() {
+	if len(os.Args) != 3 {
+		fmt.Println("Usage: ./ssh_client <s_address> <s_port>")
+		os.Exit(1)
+	}
 	fmt.Println("Client Starting...")
 	s_address := os.Args[1]
 	s_port := os.Args[2]
+
+	csi := &info.ClientServerInfo{}
+	// Load SSH server DSA public key
+	info.LoadServerDSAPubKey(csi)
+
 	fmt.Printf("Connecting to %s:%s\n", s_address, s_port)
 
 	// connect to server
@@ -31,6 +41,6 @@ func main() {
 	fmt.Printf("Protocol version exchange successful\n")
 
 	for {
-		
+
 	}
 }

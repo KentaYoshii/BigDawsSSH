@@ -1,4 +1,4 @@
-package main
+package protocol
 
 import (
         "crypto/dsa"
@@ -8,9 +8,7 @@ import (
         "encoding/asn1"
         "encoding/pem"
         "errors"
-        "flag"
         "io/ioutil"
-        "log"
         "math/big"
         "os"
 )
@@ -19,7 +17,7 @@ type dsaSignature struct {
         R, S *big.Int
 }
 
-func readFile(file string) ([]byte, error) {
+func ReadFile(file string) ([]byte, error) {
         f, err := os.Open(file)
         if err != nil {
                 return nil, err
@@ -75,7 +73,7 @@ func ParseDSAPublicKey(der []byte) (*dsa.PublicKey, error) {
 }
 
 func ParseDSAPrivateKeyFromFile(path string) (*dsa.PrivateKey, error) {
-        chunk, err := readFile(path)
+        chunk, err := ReadFile(path)
         if err != nil {
                 return nil, err
         }
@@ -88,7 +86,7 @@ func ParseDSAPrivateKeyFromFile(path string) (*dsa.PrivateKey, error) {
 }
 
 func ParseDSAPublicKeyFromFile(path string) (*dsa.PublicKey, error) {
-        chunk, err := readFile(path)
+        chunk, err := ReadFile(path)
         if err != nil {
                 return nil, err
         }
@@ -101,7 +99,7 @@ func ParseDSAPublicKeyFromFile(path string) (*dsa.PublicKey, error) {
 }
 
 func ParseSignatureFromFile(path string) (*big.Int, *big.Int, error) {
-        chunk, err := readFile(path)
+        chunk, err := ReadFile(path)
         if err != nil {
                 return nil, nil, err
         }
@@ -117,8 +115,20 @@ func ParseSignatureFromFile(path string) (*big.Int, *big.Int, error) {
         return s.R, s.S, nil
 }
 
-func hash(file string) ([]byte, error) {
-        chunk, err := readFile(file)
+func ParseSignatureFromBytes(data []byte) (*big.Int, *big.Int, error) {
+        var s dsaSignature
+        rest, err := asn1.Unmarshal(data, &s)
+        if err != nil {
+                return nil, nil, errors.New("failed to parse signature: " + err.Error())
+        }
+        if len(rest) > 0 {
+                return nil, nil, errors.New("garbage after signature")
+        }
+        return s.R, s.S, nil
+}
+
+func Hash(file string) ([]byte, error) {
+        chunk, err := ReadFile(file)
         if err != nil {
                 return nil, err
         }
@@ -127,7 +137,7 @@ func hash(file string) ([]byte, error) {
         return sum[:], nil
 }
 
-func sign(hash []byte, keyFile string) ([]byte, error) {
+func Sign(hash []byte, keyFile string) ([]byte, error) {
         priv, err := ParseDSAPrivateKeyFromFile(keyFile)
         if err != nil {
                 return nil, err
@@ -142,7 +152,7 @@ func sign(hash []byte, keyFile string) ([]byte, error) {
         return asn1.Marshal(s)
 }
 
-func verify(hash []byte, keyFile string, signatureFile string) ([]byte, error) {
+func VerifyWithSigFile(hash []byte, keyFile string, signatureFile string) ([]byte, error) {
         pub, err := ParseDSAPublicKeyFromFile(keyFile)
         if err != nil {
                 return nil, err
@@ -160,31 +170,49 @@ func verify(hash []byte, keyFile string, signatureFile string) ([]byte, error) {
         }
 }
 
-func main() {
-        file := flag.String("file", "", "file to sign")
-        action := flag.String("action", "sign", "sign or verify")
-        privKeyFile := flag.String("key", "", "private key")
-        pubKeyFile := flag.String("pubkey", "", "public key")
-        signatureFile := flag.String("signature", "", "signature to verify")
-        flag.Parse()
-
-        hash, err := hash(*file)
+func Verify(hash []byte, keyFile string, sig[]byte) ([]byte, error) {
+        pub, err := ParseDSAPublicKeyFromFile(keyFile)
         if err != nil {
-                log.Fatal("hash:", err)
+                return nil, err
         }
 
-        var out []byte
-        switch *action {
-        case "sign":
-                out, err = sign(hash, *privKeyFile)
-        case "verify":
-                out, err = verify(hash, *pubKeyFile, *signatureFile)
-        default:
-                err = errors.New("unknown action")
-        }
-
+        r, s, err := ParseSignatureFromBytes(sig)
         if err != nil {
-                log.Fatalf("%s: %s", *action, err)
+                return nil, err
         }
-        os.Stdout.Write(out)
+
+        if dsa.Verify(pub, hash, r, s) {
+                return []byte("Verified OK\n"), nil
+        } else {
+                return nil, errors.New("Verification Failure")
+        }
 }
+
+// func main() {
+//         file := flag.String("file", "", "file to sign")
+//         action := flag.String("action", "sign", "sign or verify")
+//         privKeyFile := flag.String("key", "", "private key")
+//         pubKeyFile := flag.String("pubkey", "", "public key")
+//         signatureFile := flag.String("signature", "", "signature to verify")
+//         flag.Parse()
+
+//         hash, err := hash(*file)
+//         if err != nil {
+//                 log.Fatal("hash:", err)
+//         }
+
+//         var out []byte
+//         switch *action {
+//         case "sign":
+//                 out, err = sign(hash, *privKeyFile)
+//         case "verify":
+//                 out, err = verify(hash, *pubKeyFile, *signatureFile)
+//         default:
+//                 err = errors.New("unknown action")
+//         }
+
+//         if err != nil {
+//                 log.Fatalf("%s: %s", *action, err)
+//         }
+//         os.Stdout.Write(out)
+// }

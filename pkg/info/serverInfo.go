@@ -1,10 +1,18 @@
 package info
 
 import (
+	"crypto/dsa"
 	"net"
 	protocol "ssh/pkg/protocol"
 	"sync"
+	"fmt"
+	"os"
 )
+
+type ClientServerInfo struct {
+	// Client use
+	ServerDSAPubKey *dsa.PublicKey
+}
 
 type ServerInfo struct {
 	// Basic info a/b the server
@@ -14,7 +22,7 @@ type ServerInfo struct {
 
 	// Info about the clients
 	NewID   int
-	Clients []*ClientInfo
+	Clients []*ServerClientInfo
 
 	// Channels
 	CloseChan chan bool
@@ -23,6 +31,10 @@ type ServerInfo struct {
 	// Mutexes
 	ClientsMutex *sync.Mutex
 	ClientWg     *sync.WaitGroup
+
+	// DSA
+	DSAPrivKey *dsa.PrivateKey
+	DSAPubKey  *dsa.PublicKey
 
 	// Protocol
 	PVM *protocol.ProtocolVersionMessage
@@ -45,11 +57,41 @@ func CreateNewServerInfo(hostname string, port string, listenerConn *net.TCPList
 		Port:         port,
 		ListenerConn: listenerConn,
 		NewID:        0,
-		Clients:      make([]*ClientInfo, 0),
+		Clients:      make([]*ServerClientInfo, 0),
 		CloseChan:    make(chan bool, 1),
 		CmdChan:      make(chan []string),
 		ClientsMutex: &sync.Mutex{},
 		ClientWg:     &sync.WaitGroup{},
 		PVM:          protocol.CreateProtocolVersionMessage(),
 	}
+}
+
+func LoadDSAKeys(si *ServerInfo) {
+		// Load server DSA private key
+		privKey, err := protocol.ParseDSAPrivateKeyFromFile("./data/keys/dsa-key.pem")
+		if err != nil {
+			fmt.Println("Error loading server DSA private key:", err.Error())
+			os.Exit(1)
+		}
+	
+		// Load server DSA public key
+		pubKey, err := protocol.ParseDSAPublicKeyFromFile("./data/keys/dsa-public-key.pem")
+		if err != nil {
+			fmt.Println("Error loading server DSA public key:", err.Error())
+			os.Exit(1)
+		}
+	
+		si.DSAPrivKey = privKey
+		si.DSAPubKey = pubKey
+}
+
+func LoadServerDSAPubKey(csi *ClientServerInfo) {
+	// Load server DSA public key
+	pubKey, err := protocol.ParseDSAPublicKeyFromFile("./data/keys/dsa-public-key.pem")
+	if err != nil {
+		fmt.Println("Error loading server DSA public key:", err.Error())
+		os.Exit(1)
+	}
+
+	csi.ServerDSAPubKey = pubKey
 }

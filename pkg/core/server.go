@@ -54,7 +54,7 @@ func CloseConnection(si *info.ServerInfo) {
 
 // function that gets called upon receiving a new connection
 // exchange protocol version and other info with client
-func ExchangeProtocolVersion(si *info.ServerInfo, ci *info.ClientInfo) bool {
+func ExchangeProtocolVersion(si *info.ServerInfo, ci *info.ServerClientInfo) bool {
 	pvm := si.PVM
 	conn := ci.Conn
 
@@ -81,7 +81,7 @@ func ExchangeProtocolVersion(si *info.ServerInfo, ci *info.ClientInfo) bool {
 	return err == nil
 }
 
-func HandleConnection(si *info.ServerInfo, ci *info.ClientInfo) {
+func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {
 
 	// exchange protocol version
 	if !ExchangeProtocolVersion(si, ci) {
