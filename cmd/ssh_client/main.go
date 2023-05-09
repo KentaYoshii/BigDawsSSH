@@ -18,10 +18,14 @@ func main() {
 	fmt.Println("Client Starting...")
 	s_address := os.Args[1]
 	s_port := os.Args[2]
-	csi := &info.ClientServerInfo{}
+	csi := &info.ClientServerInfo{} // info a/b server we are talking to
+	cci := &info.ClientClientInfo{} // info a/b myself
 
 	// Load SSH server DSA public key
 	info.LoadServerDSAPubKey(csi)
+
+	// Load Client name list
+	info.LoadClientNameList(cci)
 
 	// connect to server
 	fmt.Printf("Connecting to %s:%s\n", s_address, s_port)

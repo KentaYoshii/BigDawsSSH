@@ -111,12 +111,12 @@ func DoInfo(si *info.ServerInfo) error {
 
 	// hard-coded for now :(
 	data := [][]string{
-		{"Key Exchange", "dh-g1-sha1"},
-		{"Host Key", "ssh-dss"},
-		{"Encryption", "aes128-cbc"},
-		{"Mac Scheme", "hmac-sha1"},
-		{"Compression", "none"},
-		{"Languages", "none"},
+		{"Key Exchange", si.Kex_algorithms[0]},
+		{"Host Key", si.Server_host_key_algorithms[0]},
+		{"Encryption", si.Encryption_algorithms_server_to_client[0]},
+		{"Mac Scheme", si.Mac_algorithms_server_to_client[0]},
+		{"Compression", si.Compression_algorithms_server_to_client[0]},
+		{"Languages", si.Languages_server_to_client[0]},
 	}
 
 	// Create a new CSV writer
@@ -137,18 +137,18 @@ func DoInfo(si *info.ServerInfo) error {
 	// Print the table header
 	fmt.Println()
 	headerColor.Println(padding + "Server info:")
-	fmt.Println(padding + "+---------------------------+")
-	fmt.Println(padding + "| Algorithm                 |")
-	fmt.Println(padding + "+---------------------------+")
+	fmt.Println(padding + "+-------------------------------------------------+")
+	fmt.Println(padding + "| Algorithm    |                                  |")
+	fmt.Println(padding + "+-------------------------------------------------+")
 
 	for _, record := range data {
 		fmt.Printf(padding + "| ")
-		descColor.Printf("%s\t| %-10s", record[0], record[1])
+		descColor.Printf("%s\t| %-32s", record[0], record[1])
 		fmt.Println(" |")
 	}
 
 	// Print the table footer
-	fmt.Println(padding + "+---------------------------+")
+	fmt.Println(padding + "+-------------------------------------------------+")
 
 	// Flush the tabwriter to display the output
 	w.Flush()
