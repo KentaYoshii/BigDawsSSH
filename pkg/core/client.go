@@ -4,7 +4,9 @@ import (
 	"crypto/dsa"
 	"fmt"
 	"net"
+	"ssh/pkg/info"
 	proto "ssh/pkg/protocol"
+	"ssh/util"
 )
 
 func DoConnect(s_address string, s_port string) (*net.TCPConn, error) {
@@ -52,4 +54,70 @@ func DoProtocolVersionExchange(conn *net.TCPConn, dsaPubKey *dsa.PublicKey) bool
 	_, err = client_pvm.UnmarshallAndVerify(msg)
 
 	return err == nil
+}
+
+func DoAlgorithmNegotiation(conn *net.TCPConn, dsaPubKey *dsa.PublicKey, cci *info.ClientClientInfo) bool {
+
+	// Create client's algorithm negotiation message
+	canm := proto.CreateClientAlgorithmNegotiationMessage()
+	// Populate client's algorithm negotiation message
+	canm.Kex_algorithms = cci.Kex_algorithms
+	canm.Server_host_key_algorithms = cci.Server_host_key_algorithms
+	canm.Encryption_algorithms_client_to_server = cci.Encryption_algorithms_client_to_server
+	canm.Mac_algorithms_client_to_server = cci.Mac_algorithms_client_to_server
+	canm.Compression_algorithms_client_to_server = cci.Compression_algorithms_client_to_server
+	canm.Languages_client_to_server = cci.Languages_client_to_server
+	canm.First_kex_packet_follows = cci.First_kex_packet_follows
+
+	// header
+	head := make([]byte, 17)
+	head[0] = util.SSH_MSG_KEXINIT
+	// cookie
+	cookie := proto.GenerateCookie()
+	copy(head[1:17], cookie[:])
+
+	// Send client's algorithm negotiation message
+	msg_b := canm.Marshall()
+	b := append(head, msg_b...)
+	_, err := conn.Write(b)
+	if err != nil {
+		fmt.Println("Write to server failed:", err.Error())
+		return false
+	}
+
+	// Read server's algorithm negotiation message
+	buf := make([]byte, 1024)
+	_, err = conn.Read(buf)
+	if err != nil {
+		fmt.Println("Read from server failed:", err.Error())
+		return false
+	}
+
+	// DSA verify server's message
+	msg, suc := proto.VerifyServerDSASignature(buf, dsaPubKey)
+	if !suc {
+		fmt.Println("DSA Verify failed")
+		return false
+	}
+
+	// Unmarshall server's algorithm negotiation message
+	sanm, err := proto.UnmarshallServerNegotiation(msg)
+	if err != nil {
+		fmt.Println("Unmarshall server negotiation failed")
+		return false
+	}
+
+	fmt.Println("Server's algorithm negotiation message:")
+	fmt.Println("Kex_algorithms:", sanm.Kex_algorithms)
+	fmt.Println("Server_host_key_algorithms:", sanm.Server_host_key_algorithms)
+	fmt.Println("Encryption_algorithms_server_to_client:", sanm.Encryption_algorithms_server_to_client)
+	fmt.Println("Mac_algorithms_server_to_client:", sanm.Mac_algorithms_server_to_client)
+	fmt.Println("Compression_algorithms_server_to_client:", sanm.Compression_algorithms_server_to_client)
+	fmt.Println("Languages_server_to_client:", sanm.Languages_server_to_client)
+	fmt.Println("First_kex_packet_follows:", sanm.First_kex_packet_follows)	
+
+	// Do algorithm negotiation
+	proto.DoNegotiation(canm, sanm)
+
+	return true
 }

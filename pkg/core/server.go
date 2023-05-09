@@ -3,9 +3,10 @@ package connection
 import (
 	"fmt"
 	"net"
-	info "ssh/pkg/info"
 	"os"
+	info "ssh/pkg/info"
 	proto "ssh/pkg/protocol"
+	"ssh/util"
 )
 
 func CreateNewListener(service string) *net.TCPListener {
@@ -22,7 +23,7 @@ func CreateNewListener(service string) *net.TCPListener {
 	}
 	fmt.Printf("Server running at port %s\n", service)
 
-	return listener;
+	return listener
 }
 
 func AcceptNewConnection(si *info.ServerInfo) *net.TCPConn {
@@ -81,8 +82,67 @@ func ExchangeProtocolVersion(si *info.ServerInfo, ci *info.ServerClientInfo) boo
 	// unmarshall and verify protocol version
 	// comments returend here
 	_, err = pvm.UnmarshallAndVerify(b)
-	
+
 	return err == nil
+}
+
+func ExchangeNegotiationMessage(si *info.ServerInfo, ci *info.ServerClientInfo) {
+	// send server's algorithm negotiation message
+
+	// prepend the message type and cookie 
+	// SSH_MSG_KEXINIT = 20 (1 byte)
+	// cookie = 16 bytes
+	cookie := proto.GenerateCookie()
+
+	b := make([]byte, 0)
+	b = append(b, util.SSH_MSG_KEXINIT)
+	b = append(b, cookie...)
+
+	sanm := proto.CreateServerAlgorithmNegotiationMessage()
+	sanm.Kex_algorithms = si.Kex_algorithms
+	sanm.Server_host_key_algorithms = si.Server_host_key_algorithms
+	sanm.Encryption_algorithms_server_to_client = si.Encryption_algorithms_server_to_client
+	sanm.Mac_algorithms_server_to_client = si.Mac_algorithms_server_to_client
+	sanm.Compression_algorithms_server_to_client = si.Compression_algorithms_server_to_client
+	sanm.Languages_server_to_client = si.Languages_server_to_client
+	sanm.First_kex_packet_follows = false
+
+	msg_b := sanm.Marshall()
+	b = append(b, msg_b...)
+
+	b = proto.SignServerDSA(b, si.DSAPrivKey)
+	_, err := ci.Conn.Write(b)
+	if err != nil {
+		fmt.Println("Error sending algorithm negotiation message:", err.Error())
+		return
+	}
+
+	// receive client's algorithm negotiation message
+	b = make([]byte, 256)
+	_, err = ci.Conn.Read(b)
+	if err != nil {
+		fmt.Println("Error receiving algorithm negotiation message:", err.Error())
+		return
+	}
+
+	// unmarshall client's negotiation message
+	canm, err := proto.UnmarshallClientNegotiation(b)
+	if err != nil {
+		fmt.Println("Error unmarshalling client's algorithm negotiation message:", err.Error())
+		return
+	}
+
+	fmt.Println("Received client's algorithm negotiation message")
+	fmt.Println("Kex_algorithms:", canm.Kex_algorithms)
+	fmt.Println("Server_host_key_algorithms:", canm.Server_host_key_algorithms)
+	fmt.Println("Encryption_algorithms_client_to_server:", canm.Encryption_algorithms_client_to_server)
+	fmt.Println("Mac_algorithms_client_to_server:", canm.Mac_algorithms_client_to_server)
+	fmt.Println("Compression_algorithms_client_to_server:", canm.Compression_algorithms_client_to_server)
+	fmt.Println("Languages_client_to_server:", canm.Languages_client_to_server)
+	fmt.Println("First_kex_packet_follows:", canm.First_kex_packet_follows)
+
+	// do the algorithm negotiation
+	proto.DoNegotiation(canm, sanm)
 }
 
 func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {
@@ -94,4 +154,8 @@ func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {
 	}
 
 	fmt.Println("Protocol version exchange successful with client", ci.ID)
+
+
+	// exchange algorithm negotiation message
+	ExchangeNegotiationMessage(si, ci)
 }

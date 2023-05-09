@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"bytes"
+	"ssh/util"
 )
 
 // Message that gets exchanged between client and server upon connection
@@ -22,6 +24,270 @@ type SignedProtocolVersionMessage struct {
 	MessageBytes []byte
 	SignatureLength uint32
 	Signature    []byte
+}
+
+// Message that gets exchanged between client and server upon connection and after the ProtocolVersionMessage
+type ClientAlgorithmNegotiationMessage struct {
+	Kex_algorithms                          []string
+	Server_host_key_algorithms              []string
+	Encryption_algorithms_client_to_server  []string
+	Mac_algorithms_client_to_server         []string
+	Compression_algorithms_client_to_server []string
+	Languages_client_to_server              []string
+	First_kex_packet_follows                bool
+}
+
+type ServerAlgorithmNegotiationMessage struct {
+	Kex_algorithms                          []string
+	Server_host_key_algorithms              []string
+	Encryption_algorithms_server_to_client  []string
+	Mac_algorithms_server_to_client         []string
+	Compression_algorithms_server_to_client []string
+	Languages_server_to_client              []string
+	First_kex_packet_follows                bool
+}
+
+func CreateClientAlgorithmNegotiationMessage() *ClientAlgorithmNegotiationMessage {
+	return &ClientAlgorithmNegotiationMessage{
+		Kex_algorithms:                          []string{},
+		Server_host_key_algorithms:              []string{},
+		Encryption_algorithms_client_to_server:  []string{},
+		Mac_algorithms_client_to_server:         []string{},
+		Compression_algorithms_client_to_server: []string{},
+		Languages_client_to_server:              []string{},
+		First_kex_packet_follows:                false,
+	}
+}
+
+func CreateServerAlgorithmNegotiationMessage() *ServerAlgorithmNegotiationMessage {
+	return &ServerAlgorithmNegotiationMessage{
+		Kex_algorithms:                          []string{},
+		Server_host_key_algorithms:              []string{},
+		Encryption_algorithms_server_to_client:  []string{},
+		Mac_algorithms_server_to_client:         []string{},
+		Compression_algorithms_server_to_client: []string{},
+		Languages_server_to_client:              []string{},
+		First_kex_packet_follows:                false,
+	}
+}
+
+// marshalls the message into a byte array
+// size of each namelist always precedes the namelist
+func (sanm *ServerAlgorithmNegotiationMessage) Marshall() []byte {
+	
+	buf := new(bytes.Buffer)
+
+	// Kex_algorithms
+	// join the strings with a comma
+	kex_algorithms := strings.Join(sanm.Kex_algorithms, ",")
+	// write the length of the string
+	binary.Write(buf, binary.BigEndian, uint32(len(kex_algorithms)))
+	// write the string
+	binary.Write(buf, binary.BigEndian, []byte(kex_algorithms))
+
+	// Server_host_key_algorithms
+	server_host_key_algorithms := strings.Join(sanm.Server_host_key_algorithms, ",")
+	binary.Write(buf, binary.BigEndian, uint32(len(server_host_key_algorithms)))
+	binary.Write(buf, binary.BigEndian, []byte(server_host_key_algorithms))
+
+	// Encryption_algorithms_server_to_client
+	encryption_algorithms_server_to_client := strings.Join(sanm.Encryption_algorithms_server_to_client, ",")
+	binary.Write(buf, binary.BigEndian, uint32(len(encryption_algorithms_server_to_client)))
+	binary.Write(buf, binary.BigEndian, []byte(encryption_algorithms_server_to_client))
+
+	// Mac_algorithms_server_to_client
+	mac_algorithms_server_to_client := strings.Join(sanm.Mac_algorithms_server_to_client, ",")
+	binary.Write(buf, binary.BigEndian, uint32(len(mac_algorithms_server_to_client)))
+	binary.Write(buf, binary.BigEndian, []byte(mac_algorithms_server_to_client))
+
+	// Compression_algorithms_server_to_client
+	compression_algorithms_server_to_client := strings.Join(sanm.Compression_algorithms_server_to_client, ",")
+	binary.Write(buf, binary.BigEndian, uint32(len(compression_algorithms_server_to_client)))
+	binary.Write(buf, binary.BigEndian, []byte(compression_algorithms_server_to_client))
+
+	// Languages_server_to_client
+	languages_server_to_client := strings.Join(sanm.Languages_server_to_client, ",")
+	binary.Write(buf, binary.BigEndian, uint32(len(languages_server_to_client)))
+	binary.Write(buf, binary.BigEndian, []byte(languages_server_to_client))
+
+	// First_kex_packet_follows
+	if sanm.First_kex_packet_follows {
+		binary.Write(buf, binary.BigEndian, uint8(1))
+	} else {
+		binary.Write(buf, binary.BigEndian, uint8(0))
+	}
+
+	return buf.Bytes()
+}
+
+// unmarshalls the byte array into a message
+func UnmarshallServerNegotiation(buf []byte) (*ServerAlgorithmNegotiationMessage, error) {
+
+	sanm := new(ServerAlgorithmNegotiationMessage)
+
+	var curr uint32 = 0
+
+	// first byte is the message type
+	if buf[0] != util.SSH_MSG_KEXINIT {
+		return nil, errors.New("invalid message type")
+	}
+
+	curr += 1
+
+	// next 16 bytes are cookie so ignore them
+	curr += 16
+
+	// Kex_algorithms
+	kex_len := binary.BigEndian.Uint32(buf[curr:curr+4]) // get the length of the namelist
+	kex_algorithms := string(buf[curr+4:curr+kex_len+4]) // get the namelist
+	sanm.Kex_algorithms = strings.Split(kex_algorithms, ",") // split the namelist into a slice
+	curr += uint32(kex_len) + 4 // update the current position
+
+	// Server_host_key_algorithms
+	host_key_len := binary.BigEndian.Uint32(buf[curr:curr+4])
+	host_key_algorithms := string(buf[curr+4:curr+host_key_len+4])
+	sanm.Server_host_key_algorithms = strings.Split(host_key_algorithms, ",")
+	curr += uint32(host_key_len) + 4
+
+	// Encryption_algorithms_server_to_client
+	enc_len := binary.BigEndian.Uint32(buf[curr:curr+4])
+	enc_algorithms := string(buf[curr+4:curr+enc_len+4])
+	sanm.Encryption_algorithms_server_to_client = strings.Split(enc_algorithms, ",")
+	curr += uint32(enc_len) + 4
+
+	// Mac_algorithms_server_to_client
+	mac_len := binary.BigEndian.Uint32(buf[curr:curr+4])
+	mac_algorithms := string(buf[curr+4:curr+mac_len+4])
+	sanm.Mac_algorithms_server_to_client = strings.Split(mac_algorithms, ",")
+	curr += uint32(mac_len) + 4
+
+	// Compression_algorithms_server_to_client
+	compression_len := binary.BigEndian.Uint32(buf[curr:curr+4])
+	compression_algorithms := string(buf[curr+4:curr+compression_len+4])
+	sanm.Compression_algorithms_server_to_client = strings.Split(compression_algorithms, ",")
+	curr += uint32(compression_len) + 4
+
+	// Languages_server_to_client
+	languages_len := binary.BigEndian.Uint32(buf[curr:curr+4])
+	languages := string(buf[curr+4:curr+languages_len+4])
+	sanm.Languages_server_to_client = strings.Split(languages, ",")
+	curr += uint32(languages_len) + 4
+
+	// First_kex_packet_follows
+	if buf[curr] == 1 {
+		sanm.First_kex_packet_follows = true
+	} else {
+		sanm.First_kex_packet_follows = false
+	}
+
+	return sanm, nil
+}
+
+// Similar as above
+func (canm *ClientAlgorithmNegotiationMessage) Marshall() []byte {
+	buf := new(bytes.Buffer)
+
+	// Kex_algorithms
+	kex_algorithms := strings.Join(canm.Kex_algorithms, ",")
+	binary.Write(buf, binary.BigEndian, uint32(len(kex_algorithms)))
+	binary.Write(buf, binary.BigEndian, []byte(kex_algorithms))
+
+	// Server_host_key_algorithms
+	server_host_key_algorithms := strings.Join(canm.Server_host_key_algorithms, ",")
+	binary.Write(buf, binary.BigEndian, uint32(len(server_host_key_algorithms)))
+	binary.Write(buf, binary.BigEndian, []byte(server_host_key_algorithms))
+
+	// Encryption_algorithms_client_to_server
+	encryption_algorithms_client_to_server := strings.Join(canm.Encryption_algorithms_client_to_server, ",")
+	binary.Write(buf, binary.BigEndian, uint32(len(encryption_algorithms_client_to_server)))
+	binary.Write(buf, binary.BigEndian, []byte(encryption_algorithms_client_to_server))
+
+	// Mac_algorithms_client_to_server
+	mac_algorithms_client_to_server := strings.Join(canm.Mac_algorithms_client_to_server, ",")
+	binary.Write(buf, binary.BigEndian, uint32(len(mac_algorithms_client_to_server)))
+	binary.Write(buf, binary.BigEndian, []byte(mac_algorithms_client_to_server))
+
+	// Compression_algorithms_client_to_server
+	compression_algorithms_client_to_server := strings.Join(canm.Compression_algorithms_client_to_server, ",")
+	binary.Write(buf, binary.BigEndian, uint32(len(compression_algorithms_client_to_server)))
+	binary.Write(buf, binary.BigEndian, []byte(compression_algorithms_client_to_server))
+
+	// Languages_client_to_server
+	languages_client_to_server := strings.Join(canm.Languages_client_to_server, ",")
+	binary.Write(buf, binary.BigEndian, uint32(len(languages_client_to_server)))
+	binary.Write(buf, binary.BigEndian, []byte(languages_client_to_server))
+
+	// First_kex_packet_follows
+	if canm.First_kex_packet_follows {
+		binary.Write(buf, binary.BigEndian, uint8(1))
+	} else {
+		binary.Write(buf, binary.BigEndian, uint8(0))
+	}
+
+	return buf.Bytes()
+}
+
+func UnmarshallClientNegotiation(buf []byte) (*ClientAlgorithmNegotiationMessage, error){
+
+	canm := &ClientAlgorithmNegotiationMessage{}
+
+	var curr uint32 = 0
+
+	// First byte is the message type
+	if buf[0] != util.SSH_MSG_KEXINIT {
+		return nil, errors.New("invalid message type")
+	}
+
+	// Skip the message type
+	curr += 1
+
+	// Cookie
+	curr += 16
+
+	// Kex_algorithms
+	kex_len := binary.BigEndian.Uint32(buf[curr:curr+4])
+	kex_algorithms := string(buf[curr+4:curr+kex_len+4])
+	canm.Kex_algorithms = strings.Split(kex_algorithms, ",")
+	curr += uint32(kex_len) + 4
+
+	// Server_host_key_algorithms
+	host_key_len := binary.BigEndian.Uint32(buf[curr:curr+4])
+	host_key_algorithms := string(buf[curr+4:curr+host_key_len+4])
+	canm.Server_host_key_algorithms = strings.Split(host_key_algorithms, ",")
+	curr += uint32(host_key_len) + 4
+
+	// Encryption_algorithms_client_to_server
+	enc_len := binary.BigEndian.Uint32(buf[curr:curr+4])
+	enc_algorithms := string(buf[curr+4:curr+enc_len+4])
+	canm.Encryption_algorithms_client_to_server = strings.Split(enc_algorithms, ",")
+	curr += uint32(enc_len) + 4
+
+	// Mac_algorithms_client_to_server
+	mac_len := binary.BigEndian.Uint32(buf[curr:curr+4])
+	mac_algorithms := string(buf[curr+4:curr+mac_len+4])
+	canm.Mac_algorithms_client_to_server = strings.Split(mac_algorithms, ",")
+	curr += uint32(mac_len) + 4
+
+	// Compression_algorithms_client_to_server
+	compression_len := binary.BigEndian.Uint32(buf[curr:curr+4])
+	compression_algorithms := string(buf[curr+4:curr+compression_len+4])
+	canm.Compression_algorithms_client_to_server = strings.Split(compression_algorithms, ",")
+	curr += uint32(compression_len) + 4
+
+	// Languages_client_to_server
+	languages_len := binary.BigEndian.Uint32(buf[curr:curr+4])
+	languages := string(buf[curr+4:curr+languages_len+4])
+	canm.Languages_client_to_server = strings.Split(languages, ",")
+	curr += uint32(languages_len) + 4
+
+	// First_kex_packet_follows
+	if buf[curr] == 1 {
+		canm.First_kex_packet_follows = true
+	} else {
+		canm.First_kex_packet_follows = false
+	}
+
+	return canm, nil
 }
 
 func SignServerDSA(msg_bytes []byte, privKey *dsa.PrivateKey) []byte {

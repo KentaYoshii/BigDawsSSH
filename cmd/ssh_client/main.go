@@ -45,6 +45,12 @@ func main() {
 
 	fmt.Printf("Protocol version exchange successful\n")
 
+	// send client name list to server
+	if !core.DoAlgorithmNegotiation(ssh_conn, csi.ServerDSAPubKey, cci) {
+		fmt.Println("Algorithm negotiation failed")
+		os.Exit(1)
+	}
+
 	for {
 
 	}
