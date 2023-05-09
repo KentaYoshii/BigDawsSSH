@@ -4,3 +4,7 @@ make:
 
 clean:
 	rm -f client server
+
+all: 
+	make clean
+	make

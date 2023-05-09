@@ -5,6 +5,7 @@ import (
 	"net"
 	info "ssh/pkg/info"
 	"os"
+	proto "ssh/pkg/protocol"
 )
 
 func CreateNewListener(service string) *net.TCPListener {
@@ -58,15 +59,18 @@ func ExchangeProtocolVersion(si *info.ServerInfo, ci *info.ServerClientInfo) boo
 	pvm := si.PVM
 	conn := ci.Conn
 
-	// send protocol version
+	// marshall the server's stored protocol version message
 	b := pvm.Marshall()
+
+	// DSA sign protocol version message
+	b = proto.SignServerDSA(b, si.DSAPrivKey)
 	_, err := conn.Write(b)
 	if err != nil {
 		fmt.Println("Error sending protocol version:", err.Error())
 		return false
 	}
 
-	// receive protocol version
+	// receive protocol version message from client (raw) so max 256 bytes
 	b = make([]byte, 256)
 	_, err = conn.Read(b)
 	if err != nil {
@@ -88,4 +92,6 @@ func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {
 		fmt.Println("Protocol version exchange failed")
 		return
 	}
+
+	fmt.Println("Protocol version exchange successful with client", ci.ID)
 }

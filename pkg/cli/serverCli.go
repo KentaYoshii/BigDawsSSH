@@ -7,13 +7,15 @@ import (
 	"strings"
 	info "ssh/pkg/info"
 	"github.com/fatih/color"
+	"encoding/csv"
+	"text/tabwriter"
 )
 
 const (
 	HELP = iota
 	QUIT
 	LIST
-	CONNECT
+	INFO
 )
 
 func CmdToIndex(cmd string) int {
@@ -24,6 +26,8 @@ func CmdToIndex(cmd string) int {
 		return QUIT
 	case "list":
 		return LIST
+	case "info":
+		return INFO
 	default:
 		return -1
 	}
@@ -39,6 +43,8 @@ func GetHandler(cmdIdx int) HandlerFn {
 		return DoQuit
 	case LIST:
 		return DoList
+	case INFO:
+		return DoInfo
 	default:
 		return nil
 	}
@@ -85,8 +91,68 @@ func DoHelp(si *info.ServerInfo) error {
 	descColor.Printf("%-24s", "Exit the program")
 	fmt.Println(commandColor.Sprintf(" |"))
 
+	commandColor.Printf(padding + "| ")
+	descColor.Printf("%-10s", "info")
+	fmt.Print(commandColor.Sprintf(" | "))
+	descColor.Printf("%-24s", "Display server info")
+	fmt.Println(commandColor.Sprintf(" |"))
+
 	// Print the table footer
 	fmt.Println(padding + "+------------+--------------------------+")
+	fmt.Println()
+	return nil
+}
+
+// Function that prints the server's accepted algorithms
+func DoInfo(si *info.ServerInfo) error {
+	// Define the colors for the table
+	headerColor := color.New(color.FgGreen, color.Bold)
+	descColor := color.New(color.FgWhite)
+
+	// hard-coded for now :(
+	data := [][]string{
+		{"Key Exchange", "dh-g1-sha1"},
+		{"Host Key", "ssh-dss"},
+		{"Encryption", "aes128-cbc"},
+		{"Mac Scheme", "hmac-sha1"},
+		{"Compression", "none"},
+		{"Languages", "none"},
+	}
+
+	// Create a new CSV writer
+	writer := csv.NewWriter(os.Stdout)
+
+	// Set the delimiter to a tab character for a neater format
+	writer.Comma = '\t'
+
+	// Create a new tabwriter with padding and alignment settings
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+
+	// Write the CSV data to the tabwriter
+	// Define the table width and spacing
+	tableWidth := 30
+	spacing := (80 - tableWidth) / 2
+	padding := strings.Repeat(" ", spacing)
+
+	// Print the table header
+	fmt.Println()
+	headerColor.Println(padding + "Server info:")
+	fmt.Println(padding + "+---------------------------+")
+	fmt.Println(padding + "| Algorithm                 |")
+	fmt.Println(padding + "+---------------------------+")
+
+	for _, record := range data {
+		fmt.Printf(padding + "| ")
+		descColor.Printf("%s\t| %-10s", record[0], record[1])
+		fmt.Println(" |")
+	}
+
+	// Print the table footer
+	fmt.Println(padding + "+---------------------------+")
+
+	// Flush the tabwriter to display the output
+	w.Flush()
+
 	fmt.Println()
 	return nil
 }

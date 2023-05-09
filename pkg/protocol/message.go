@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"crypto/dsa"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -14,6 +15,58 @@ type ProtocolVersionMessage struct {
 	ProtoVersion    string   // 2.0
 	SoftwareVersion string   // Compatability check
 	Comments        []string // Additional info
+}
+
+type SignedProtocolVersionMessage struct {
+	MessageLength uint32
+	MessageBytes []byte
+	SignatureLength uint32
+	Signature    []byte
+}
+
+func SignServerDSA(msg_bytes []byte, privKey *dsa.PrivateKey) []byte {
+	ret := &SignedProtocolVersionMessage{}
+	ret.MessageLength = uint32(len(msg_bytes))
+	ret.MessageBytes = msg_bytes
+	sig, err := DSASign(msg_bytes, privKey)
+	if err != nil {
+		fmt.Println("DSA Sign failed:", err.Error())
+		return nil
+	}
+	ret.SignatureLength = uint32(len(sig))
+	ret.Signature = sig
+	return ret.Marshall()
+}
+
+// 4 bytes for message length
+// + message length bytes
+// + 4 bytes for signature length
+// + signature length bytes
+func (spvm *SignedProtocolVersionMessage) Marshall() []byte {
+	data := make([]byte, 4+spvm.MessageLength+4+spvm.SignatureLength)
+	binary.BigEndian.PutUint32(data, spvm.MessageLength)
+	copy(data[4:], spvm.MessageBytes)
+	binary.BigEndian.PutUint32(data[4+spvm.MessageLength:], spvm.SignatureLength)
+	copy(data[4+spvm.MessageLength+4:], spvm.Signature)
+	return data
+}
+
+func VerifyServerDSASignature(buf []byte, pubKey *dsa.PublicKey) ([]byte, bool) {
+	// read the first 4 bytes
+	msg_len := binary.BigEndian.Uint32(buf[:4])
+	// read the next msg_len bytes
+	msg_bytes := buf[4:msg_len+4]
+	// read the next 4 bytes
+	sig_len := binary.BigEndian.Uint32(buf[msg_len+4:msg_len+8])
+	// read the next sig_len bytes
+	sig_bytes := buf[msg_len+8:msg_len+8+sig_len]
+	// verify the signature
+	_, err := DSAVerify(msg_bytes, pubKey, sig_bytes)
+	if err != nil {
+		fmt.Println("DSA Verify failed:", err.Error())
+		return nil, false
+	}
+	return msg_bytes, true
 }
 
 func CreateProtocolVersionMessage() *ProtocolVersionMessage {
@@ -48,6 +101,8 @@ func (pvm *ProtocolVersionMessage) Marshall() []byte {
 	return data
 }
 
+// Function that verifies the protocol version message has the following format
+// SSH-Version-SofwareVersion<CR><LF> or SSH-Version-SofwareVersion comments<CR><LF>
 func (pvm *ProtocolVersionMessage) UnmarshallAndVerify(data []byte) ([]string, error) {
 	// Read the size
 	sz := binary.BigEndian.Uint32(data[:4])

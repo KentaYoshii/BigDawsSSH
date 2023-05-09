@@ -1,7 +1,7 @@
-key_algorithms
-server_host_key_algorithms
-encryption_algorithms_client_to_server,aes128-cbc,3des-cbc
-encryption_algorithms_server_to_client,aes128-cbc,3des-cbc
-mac_algorithms_client_to_server
-mac_algorithms_server_to_client
+kex_algorithms,diffie-hellman-group1-sha1
+server_host_key_algorithms,ssh-dss
+encryption_algorithms_server_to_client,aes128-cbc
+mac_algorithms_server_to_client,hmac-sha1
+compression_algorithms_server_to_client,none
+languages_server_to_client,none
 first_kex_packet_follows,false

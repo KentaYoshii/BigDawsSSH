@@ -1,8 +1,9 @@
 package connection
 
 import (
-	"net"
+	"crypto/dsa"
 	"fmt"
+	"net"
 	proto "ssh/pkg/protocol"
 )
 
@@ -21,10 +22,11 @@ func DoConnect(s_address string, s_port string) (*net.TCPConn, error) {
 	return conn, nil
 }
 
-func DoProtocolVersionExchange(conn *net.TCPConn) bool {
+func DoProtocolVersionExchange(conn *net.TCPConn, dsaPubKey *dsa.PublicKey) bool {
+	// create client's protocol version message
 	client_pvm := proto.CreateProtocolVersionMessage()
 
-	// send client's protocol version
+	// send client's protocol version raw
 	b := client_pvm.Marshall()
 	_, err := conn.Write(b)
 	if err != nil {
@@ -32,16 +34,22 @@ func DoProtocolVersionExchange(conn *net.TCPConn) bool {
 		return false
 	}
 
-	// read server's protocol version
-	buf := make([]byte, 256)
+	// read server's protocol version which should be digitally signed with server's DSA private key
+	buf := make([]byte, 1024)
     _, err = conn.Read(buf)
 	if err != nil {
 		fmt.Println("Read from server failed:", err.Error())
 		return false
 	}
 
+	// DSA verify server's message
+	msg, suc := proto.VerifyServerDSASignature(buf, dsaPubKey)
+	if !suc {
+		fmt.Println("DSA Verify failed")
+		return false
+	} 
 	// unmarshall server's protocol version
-	_, err = client_pvm.UnmarshallAndVerify(buf)
+	_, err = client_pvm.UnmarshallAndVerify(msg)
 
 	return err == nil
 }

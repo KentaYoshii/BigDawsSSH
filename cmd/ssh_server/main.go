@@ -25,6 +25,9 @@ func main() {
 	// Set up ServerInfo Struct
 	serverInfo := info.CreateNewServerInfo("localhost", port, listener)
 
+	// Set up Server acceptable algorithm lists
+	info.LoadServerNameList(serverInfo)
+
 	// Load DSA keys
 	info.LoadDSAKeys(serverInfo)
 

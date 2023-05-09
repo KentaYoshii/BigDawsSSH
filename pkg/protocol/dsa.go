@@ -28,7 +28,7 @@ func ReadFile(file string) ([]byte, error) {
 
 // ParseDSAPrivateKey returns a DSA private key from its ASN.1 DER encoding, as
 // specified by the OpenSSL DSA man page.
-func ParseDSAPrivateKey(der []byte) (*dsa.PrivateKey, error) {
+func DSAParseDSAPrivateKey(der []byte) (*dsa.PrivateKey, error) {
         var k struct {
                 Version int
                 P       *big.Int
@@ -82,7 +82,7 @@ func ParseDSAPrivateKeyFromFile(path string) (*dsa.PrivateKey, error) {
         if err != nil {
                 return nil, errors.New("failed to parse PEM block")
         }
-        return ParseDSAPrivateKey(block.Bytes)
+        return DSAParseDSAPrivateKey(block.Bytes)
 }
 
 func ParseDSAPublicKeyFromFile(path string) (*dsa.PublicKey, error) {
@@ -115,7 +115,7 @@ func ParseSignatureFromFile(path string) (*big.Int, *big.Int, error) {
         return s.R, s.S, nil
 }
 
-func ParseSignatureFromBytes(data []byte) (*big.Int, *big.Int, error) {
+func DSAParseSignatureFromBytes(data []byte) (*big.Int, *big.Int, error) {
         var s dsaSignature
         rest, err := asn1.Unmarshal(data, &s)
         if err != nil {
@@ -137,14 +137,10 @@ func Hash(file string) ([]byte, error) {
         return sum[:], nil
 }
 
-func Sign(hash []byte, keyFile string) ([]byte, error) {
-        priv, err := ParseDSAPrivateKeyFromFile(keyFile)
-        if err != nil {
-                return nil, err
-        }
-
+func DSASign(hash []byte, priKey *dsa.PrivateKey) ([]byte, error) {
+        var err error
         var s dsaSignature
-        s.R, s.S, err = dsa.Sign(rand.Reader, priv, hash)
+        s.R, s.S, err = dsa.Sign(rand.Reader, priKey, hash)
         if err != nil {
                 return nil, err
         }
@@ -152,7 +148,7 @@ func Sign(hash []byte, keyFile string) ([]byte, error) {
         return asn1.Marshal(s)
 }
 
-func VerifyWithSigFile(hash []byte, keyFile string, signatureFile string) ([]byte, error) {
+func DSAVerifyWithSigFile(hash []byte, keyFile string, signatureFile string) ([]byte, error) {
         pub, err := ParseDSAPublicKeyFromFile(keyFile)
         if err != nil {
                 return nil, err
@@ -166,17 +162,12 @@ func VerifyWithSigFile(hash []byte, keyFile string, signatureFile string) ([]byt
         if dsa.Verify(pub, hash, r, s) {
                 return []byte("Verified OK\n"), nil
         } else {
-                return nil, errors.New("Verification Failure")
+                return nil, errors.New("verification Failure")
         }
 }
 
-func Verify(hash []byte, keyFile string, sig[]byte) ([]byte, error) {
-        pub, err := ParseDSAPublicKeyFromFile(keyFile)
-        if err != nil {
-                return nil, err
-        }
-
-        r, s, err := ParseSignatureFromBytes(sig)
+func DSAVerify(hash []byte, pub *dsa.PublicKey, sig[]byte) ([]byte, error) {
+        r, s, err := DSAParseSignatureFromBytes(sig)
         if err != nil {
                 return nil, err
         }
@@ -184,35 +175,6 @@ func Verify(hash []byte, keyFile string, sig[]byte) ([]byte, error) {
         if dsa.Verify(pub, hash, r, s) {
                 return []byte("Verified OK\n"), nil
         } else {
-                return nil, errors.New("Verification Failure")
+                return nil, errors.New("verification Failure")
         }
 }
-
-// func main() {
-//         file := flag.String("file", "", "file to sign")
-//         action := flag.String("action", "sign", "sign or verify")
-//         privKeyFile := flag.String("key", "", "private key")
-//         pubKeyFile := flag.String("pubkey", "", "public key")
-//         signatureFile := flag.String("signature", "", "signature to verify")
-//         flag.Parse()
-
-//         hash, err := hash(*file)
-//         if err != nil {
-//                 log.Fatal("hash:", err)
-//         }
-
-//         var out []byte
-//         switch *action {
-//         case "sign":
-//                 out, err = sign(hash, *privKeyFile)
-//         case "verify":
-//                 out, err = verify(hash, *pubKeyFile, *signatureFile)
-//         default:
-//                 err = errors.New("unknown action")
-//         }
-
-//         if err != nil {
-//                 log.Fatalf("%s: %s", *action, err)
-//         }
-//         os.Stdout.Write(out)
-// }
