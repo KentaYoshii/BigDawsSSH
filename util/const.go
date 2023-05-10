@@ -14,4 +14,7 @@ const (
 	SSH_MSG_SERVICE_ACCEPT  = 6
 	SSH_MSG_KEXINIT         = 20
 	SSH_MSG_NEWKEYS         = 21
+
+	// 30 ~ 49 are for key exchange
+	SSH_MSG_KEXDH_INIT    = 30
 )

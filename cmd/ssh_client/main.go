@@ -5,6 +5,7 @@ import (
 	"os"
 	core "ssh/pkg/core"
 	info "ssh/pkg/info"
+	proto "ssh/pkg/protocol"
 )
 
 
@@ -55,6 +56,14 @@ func main() {
 	}
 
 	fmt.Printf("Algorithm negotiation successful\n")
+
+	// do key exchange
+	if !proto.Do_KEX_Client(csi.AgreedAlgorithm.Kex_algorithm)(csi.ServerConn) {
+		fmt.Println("Key exchange failed")
+		os.Exit(1)
+	}
+
+	fmt.Printf("Key exchange successful\n")
 
 	for {
 

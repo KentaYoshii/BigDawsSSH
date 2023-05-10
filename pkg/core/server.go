@@ -166,4 +166,17 @@ func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {
 		ci.Conn.Close()
 		return
 	}
+
+	fmt.Println("Algorithm negotiation successful with client", ci.ID)
+
+	// key exchange
+
+	if !proto.Do_KEX_Server(si.ClientsAlgorithms[ci.ID].Kex_algorithm)(ci.Conn) {
+		fmt.Println("Key exchange failed")
+		// close connection
+		ci.Conn.Close()
+		return
+	}
+
+	fmt.Println("Key exchange successful with client", ci.ID)
 }
