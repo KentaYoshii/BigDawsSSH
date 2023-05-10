@@ -86,7 +86,7 @@ func ExchangeProtocolVersion(si *info.ServerInfo, ci *info.ServerClientInfo) boo
 	return err == nil
 }
 
-func ExchangeNegotiationMessage(si *info.ServerInfo, ci *info.ServerClientInfo) {
+func ExchangeNegotiationMessage(si *info.ServerInfo, ci *info.ServerClientInfo) bool {
 	// send server's algorithm negotiation message
 
 	// prepend the message type and cookie 
@@ -114,7 +114,7 @@ func ExchangeNegotiationMessage(si *info.ServerInfo, ci *info.ServerClientInfo) 
 	_, err := ci.Conn.Write(b)
 	if err != nil {
 		fmt.Println("Error sending algorithm negotiation message:", err.Error())
-		return
+		return false
 	}
 
 	// receive client's algorithm negotiation message
@@ -122,27 +122,28 @@ func ExchangeNegotiationMessage(si *info.ServerInfo, ci *info.ServerClientInfo) 
 	_, err = ci.Conn.Read(b)
 	if err != nil {
 		fmt.Println("Error receiving algorithm negotiation message:", err.Error())
-		return
-	}
+		return false
+	} 
 
 	// unmarshall client's negotiation message
 	canm, err := proto.UnmarshallClientNegotiation(b)
 	if err != nil {
 		fmt.Println("Error unmarshalling client's algorithm negotiation message:", err.Error())
-		return
+		return false
 	}
 
-	fmt.Println("Received client's algorithm negotiation message")
-	fmt.Println("Kex_algorithms:", canm.Kex_algorithms)
-	fmt.Println("Server_host_key_algorithms:", canm.Server_host_key_algorithms)
-	fmt.Println("Encryption_algorithms_client_to_server:", canm.Encryption_algorithms_client_to_server)
-	fmt.Println("Mac_algorithms_client_to_server:", canm.Mac_algorithms_client_to_server)
-	fmt.Println("Compression_algorithms_client_to_server:", canm.Compression_algorithms_client_to_server)
-	fmt.Println("Languages_client_to_server:", canm.Languages_client_to_server)
-	fmt.Println("First_kex_packet_follows:", canm.First_kex_packet_follows)
-
 	// do the algorithm negotiation
-	proto.DoNegotiation(canm, sanm)
+	agreed, err := proto.DoNegotiation(canm, sanm)
+	if err != nil {
+		fmt.Println("Error doing algorithm negotiation:", err.Error())
+		return false
+	}
+
+	si.ClientsMutex.Lock()
+	si.ClientsAlgorithms[ci.ID] = agreed
+	si.ClientsMutex.Unlock()
+
+	return true
 }
 
 func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {
@@ -150,6 +151,8 @@ func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {
 	// exchange protocol version
 	if !ExchangeProtocolVersion(si, ci) {
 		fmt.Println("Protocol version exchange failed")
+		// close connection
+		ci.Conn.Close()
 		return
 	}
 
@@ -157,5 +160,10 @@ func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {
 
 
 	// exchange algorithm negotiation message
-	ExchangeNegotiationMessage(si, ci)
+	if !ExchangeNegotiationMessage(si, ci) {
+		fmt.Println("Algorithm negotiation failed")
+		// close connection
+		ci.Conn.Close()
+		return
+	}
 }

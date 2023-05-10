@@ -37,9 +37,9 @@ func CreateNewClientInfo(id int, address string, conn *net.TCPConn) *ServerClien
 
 // Function that loads the csv file that contains the list of supported algorithms
 // for the ssh server in the order of preference
-func LoadClientNameList(cci *ClientClientInfo) {
+func LoadClientNameList(cci *ClientClientInfo, filename string) {
 	// open file
-	file, err := os.Open("./data/namelist/client.csv")
+	file, err := os.Open(filename)
 	if err != nil {
 		fmt.Println("Error opening client name list:", err.Error())
 		os.Exit(1)

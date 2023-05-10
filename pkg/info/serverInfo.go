@@ -13,6 +13,8 @@ import (
 type ClientServerInfo struct {
 	// Client use
 	ServerDSAPubKey *dsa.PublicKey
+	ServerConn      *net.TCPConn
+	AgreedAlgorithm *protocol.AgreedNegotiation
 }
 
 type ServerInfo struct {
@@ -22,8 +24,9 @@ type ServerInfo struct {
 	ListenerConn *net.TCPListener
 
 	// Info about the clients
-	NewID   int
-	Clients []*ServerClientInfo
+	NewID             int
+	Clients           []*ServerClientInfo
+	ClientsAlgorithms map[int]*protocol.AgreedNegotiation
 
 	// Channels
 	CloseChan chan bool
@@ -54,16 +57,17 @@ type ServerInfo struct {
 
 func CreateNewServerInfo(hostname string, port string, listenerConn *net.TCPListener) *ServerInfo {
 	return &ServerInfo{
-		Hostname:     hostname,
-		Port:         port,
-		ListenerConn: listenerConn,
-		NewID:        0,
-		Clients:      make([]*ServerClientInfo, 0),
-		CloseChan:    make(chan bool, 1),
-		CmdChan:      make(chan []string),
-		ClientsMutex: &sync.Mutex{},
-		ClientWg:     &sync.WaitGroup{},
-		PVM:          protocol.CreateProtocolVersionMessage(),
+		Hostname:          hostname,
+		Port:              port,
+		ListenerConn:      listenerConn,
+		NewID:             0,
+		Clients:           make([]*ServerClientInfo, 0),
+		ClientsAlgorithms: make(map[int]*protocol.AgreedNegotiation),
+		CloseChan:         make(chan bool, 1),
+		CmdChan:           make(chan []string),
+		ClientsMutex:      &sync.Mutex{},
+		ClientWg:          &sync.WaitGroup{},
+		PVM:               protocol.CreateProtocolVersionMessage(),
 	}
 }
 

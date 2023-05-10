@@ -10,14 +10,15 @@ import (
 
 func main() {
 
-	if len(os.Args) != 3 {
-		fmt.Println("Usage: ./ssh_client <s_address> <s_port>")
+	if len(os.Args) != 4 {
+		fmt.Println("Usage: ./ssh_client <s_address> <s_port> <name-list file path>")
 		os.Exit(1)
 	}
 
 	fmt.Println("Client Starting...")
 	s_address := os.Args[1]
 	s_port := os.Args[2]
+	name_list_path := os.Args[3]
 	csi := &info.ClientServerInfo{} // info a/b server we are talking to
 	cci := &info.ClientClientInfo{} // info a/b myself
 
@@ -25,7 +26,7 @@ func main() {
 	info.LoadServerDSAPubKey(csi)
 
 	// Load Client name list
-	info.LoadClientNameList(cci)
+	info.LoadClientNameList(cci, name_list_path)
 
 	// connect to server
 	fmt.Printf("Connecting to %s:%s\n", s_address, s_port)
@@ -35,21 +36,25 @@ func main() {
 		os.Exit(1)
 	}
 
+	csi.ServerConn = ssh_conn
+
 	fmt.Printf("Connected to %s\n", ssh_conn.RemoteAddr().String())
 
 	// exchange protocol version and other info with server
-	if !core.DoProtocolVersionExchange(ssh_conn, csi.ServerDSAPubKey) {
+	if !core.DoProtocolVersionExchange(csi) {
 		fmt.Println("Protocol version exchange failed")
 		os.Exit(1)
 	}
 
 	fmt.Printf("Protocol version exchange successful\n")
 
-	// send client name list to server
-	if !core.DoAlgorithmNegotiation(ssh_conn, csi.ServerDSAPubKey, cci) {
+	// do algorithm negotiation
+	if !core.DoAlgorithmNegotiation(csi, cci) {
 		fmt.Println("Algorithm negotiation failed")
 		os.Exit(1)
 	}
+
+	fmt.Printf("Algorithm negotiation successful\n")
 
 	for {
 

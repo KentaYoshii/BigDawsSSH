@@ -16,6 +16,7 @@ const (
 	QUIT
 	LIST
 	INFO
+	CLIENT_ALGORITHM
 )
 
 func CmdToIndex(cmd string) int {
@@ -28,6 +29,8 @@ func CmdToIndex(cmd string) int {
 		return LIST
 	case "info":
 		return INFO
+	case "cli_algo":
+		return CLIENT_ALGORITHM
 	default:
 		return -1
 	}
@@ -45,6 +48,8 @@ func GetHandler(cmdIdx int) HandlerFn {
 		return DoList
 	case INFO:
 		return DoInfo
+	case CLIENT_ALGORITHM:
+		return DoClientAlgorithm
 	default:
 		return nil
 	}
@@ -97,6 +102,12 @@ func DoHelp(si *info.ServerInfo) error {
 	descColor.Printf("%-24s", "Display server info")
 	fmt.Println(commandColor.Sprintf(" |"))
 
+	commandColor.Printf(padding + "| ")
+	descColor.Printf("%-10s", "cli_algo")
+	fmt.Print(commandColor.Sprintf(" | "))
+	descColor.Printf("%-24s", "show negotiated algos")
+	fmt.Println(commandColor.Sprintf(" |"))
+
 	// Print the table footer
 	fmt.Println(padding + "+------------+--------------------------+")
 	fmt.Println()
@@ -109,7 +120,6 @@ func DoInfo(si *info.ServerInfo) error {
 	headerColor := color.New(color.FgGreen, color.Bold)
 	descColor := color.New(color.FgWhite)
 
-	// hard-coded for now :(
 	data := [][]string{
 		{"Key Exchange", si.Kex_algorithms[0]},
 		{"Host Key", si.Server_host_key_algorithms[0]},
@@ -154,6 +164,62 @@ func DoInfo(si *info.ServerInfo) error {
 	w.Flush()
 
 	fmt.Println()
+	return nil
+}
+
+func DoClientAlgorithm(si *info.ServerInfo) error {
+	// Define the colors for the table
+	headerColor := color.New(color.FgGreen, color.Bold)
+	descColor := color.New(color.FgWhite)
+	
+	// for each client 
+	for idx, client := range si.ClientsAlgorithms {
+		fmt.Println()
+		data := [][]string{
+			{"Key Exchange", client.Kex_algorithm},
+			{"Host Key", client.Server_host_key_algorithm},
+			{"Encryption", client.Encryption_algorithm},
+			{"Mac Scheme", client.Mac_algorithm},
+			{"Compression", client.Compression_algorithm},
+			{"Languages", client.Language},
+		}
+	
+		// Create a new CSV writer
+		writer := csv.NewWriter(os.Stdout)
+	
+		// Set the delimiter to a tab character for a neater format
+		writer.Comma = '\t'
+	
+		// Create a new tabwriter with padding and alignment settings
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	
+		// Write the CSV data to the tabwriter
+		// Define the table width and spacing
+		tableWidth := 30
+		spacing := (80 - tableWidth) / 2
+		padding := strings.Repeat(" ", spacing)
+	
+		// Print the table header
+		fmt.Println()
+		headerColor.Println(padding + "Client", si.Clients[idx].Address, "info:")
+		fmt.Println(padding + "+-------------------------------------------------+")
+		fmt.Println(padding + "| Algorithm    |                                  |")
+		fmt.Println(padding + "+-------------------------------------------------+")
+	
+		for _, record := range data {
+			fmt.Printf(padding + "| ")
+			descColor.Printf("%s\t| %-32s", record[0], record[1])
+			fmt.Println(" |")
+		}
+	
+		// Print the table footer
+		fmt.Println(padding + "+-------------------------------------------------+")
+	
+		// Flush the tabwriter to display the output
+		w.Flush()
+	
+		fmt.Println()
+	}
 	return nil
 }
 

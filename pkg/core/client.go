@@ -1,7 +1,6 @@
 package connection
 
 import (
-	"crypto/dsa"
 	"fmt"
 	"net"
 	"ssh/pkg/info"
@@ -24,7 +23,11 @@ func DoConnect(s_address string, s_port string) (*net.TCPConn, error) {
 	return conn, nil
 }
 
-func DoProtocolVersionExchange(conn *net.TCPConn, dsaPubKey *dsa.PublicKey) bool {
+func DoProtocolVersionExchange(csi *info.ClientServerInfo) bool {
+
+	conn := csi.ServerConn
+	dsaPubKey := csi.ServerDSAPubKey
+
 	// create client's protocol version message
 	client_pvm := proto.CreateProtocolVersionMessage()
 
@@ -56,7 +59,10 @@ func DoProtocolVersionExchange(conn *net.TCPConn, dsaPubKey *dsa.PublicKey) bool
 	return err == nil
 }
 
-func DoAlgorithmNegotiation(conn *net.TCPConn, dsaPubKey *dsa.PublicKey, cci *info.ClientClientInfo) bool {
+func DoAlgorithmNegotiation(csi *info.ClientServerInfo, cci *info.ClientClientInfo) bool {
+
+	conn := csi.ServerConn
+	dsaPubKey := csi.ServerDSAPubKey
 
 	// Create client's algorithm negotiation message
 	canm := proto.CreateClientAlgorithmNegotiationMessage()
@@ -107,17 +113,13 @@ func DoAlgorithmNegotiation(conn *net.TCPConn, dsaPubKey *dsa.PublicKey, cci *in
 		return false
 	}
 
-	fmt.Println("Server's algorithm negotiation message:")
-	fmt.Println("Kex_algorithms:", sanm.Kex_algorithms)
-	fmt.Println("Server_host_key_algorithms:", sanm.Server_host_key_algorithms)
-	fmt.Println("Encryption_algorithms_server_to_client:", sanm.Encryption_algorithms_server_to_client)
-	fmt.Println("Mac_algorithms_server_to_client:", sanm.Mac_algorithms_server_to_client)
-	fmt.Println("Compression_algorithms_server_to_client:", sanm.Compression_algorithms_server_to_client)
-	fmt.Println("Languages_server_to_client:", sanm.Languages_server_to_client)
-	fmt.Println("First_kex_packet_follows:", sanm.First_kex_packet_follows)	
-
 	// Do algorithm negotiation
-	proto.DoNegotiation(canm, sanm)
+	agreed, err := proto.DoNegotiation(canm, sanm)
+	if err != nil {
+		fmt.Println("Do negotiation failed")
+		return false
+	}
 
+	csi.AgreedAlgorithm = agreed
 	return true
 }
