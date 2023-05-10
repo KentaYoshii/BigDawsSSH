@@ -1,10 +1,12 @@
 package info
 
 import (
-	"net"
-	"os"
 	"encoding/csv"
 	"fmt"
+	"net"
+	"os"
+	proto "ssh/pkg/protocol"
+	dh "github.com/monnand/dhkx"
 )
 
 type ServerClientInfo struct {
@@ -13,6 +15,12 @@ type ServerClientInfo struct {
 	Address string
 	Conn    *net.TCPConn
 	Status  int
+
+	// Kex
+	PVM            *proto.ProtocolVersionMessage
+	ClientKInitMSG []byte
+	SharedSecret   *dh.DHKey
+	ExchangeHash   []byte
 }
 
 type ClientClientInfo struct {
@@ -24,6 +32,9 @@ type ClientClientInfo struct {
 	Compression_algorithms_client_to_server []string
 	Languages_client_to_server              []string
 	First_kex_packet_follows                bool
+
+	ClientKInitMSG []byte
+	ClientPVM      *proto.ProtocolVersionMessage
 }
 
 func CreateNewClientInfo(id int, address string, conn *net.TCPConn) *ServerClientInfo {

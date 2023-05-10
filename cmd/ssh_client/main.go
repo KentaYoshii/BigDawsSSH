@@ -8,7 +8,6 @@ import (
 	proto "ssh/pkg/protocol"
 )
 
-
 func main() {
 
 	if len(os.Args) != 4 {
@@ -42,7 +41,7 @@ func main() {
 	fmt.Printf("Connected to %s\n", ssh_conn.RemoteAddr().String())
 
 	// exchange protocol version and other info with server
-	if !core.DoProtocolVersionExchange(csi) {
+	if !core.DoProtocolVersionExchange(csi, cci) {
 		fmt.Println("Protocol version exchange failed")
 		os.Exit(1)
 	}
@@ -57,11 +56,21 @@ func main() {
 
 	fmt.Printf("Algorithm negotiation successful\n")
 
+	kex_algo := csi.AgreedAlgorithm.Kex_algorithm
+	group := proto.GetDHGroup(kex_algo)
+
 	// do key exchange
-	if !proto.Do_KEX_Client(csi.AgreedAlgorithm.Kex_algorithm)(csi.ServerConn) {
+	k, exh, suc := proto.Do_KEX_Client(csi.AgreedAlgorithm.Kex_algorithm)(csi.ServerConn,
+		group, csi.PVM, cci.ClientPVM, csi.KInitMSG, cci.ClientKInitMSG,
+		csi.ServerDSAPubKey)
+	
+	if !suc {
 		fmt.Println("Key exchange failed")
 		os.Exit(1)
 	}
+
+	csi.SharedSecret = k
+	csi.ExchangeHash = exh
 
 	fmt.Printf("Key exchange successful\n")
 

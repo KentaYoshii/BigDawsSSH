@@ -81,7 +81,14 @@ func ExchangeProtocolVersion(si *info.ServerInfo, ci *info.ServerClientInfo) boo
 
 	// unmarshall and verify protocol version
 	// comments returend here
-	_, err = pvm.UnmarshallAndVerify(b)
+	cliPVM, _, err := pvm.UnmarshallAndVerify(b)
+	if err != nil {
+		fmt.Println("Error unmarshalling and verifying protocol version:", err.Error())
+		return false
+	}
+
+	// store client's protocol version message
+	ci.PVM = cliPVM
 
 	return err == nil
 }
@@ -89,7 +96,7 @@ func ExchangeProtocolVersion(si *info.ServerInfo, ci *info.ServerClientInfo) boo
 func ExchangeNegotiationMessage(si *info.ServerInfo, ci *info.ServerClientInfo) bool {
 	// send server's algorithm negotiation message
 
-	// prepend the message type and cookie 
+	// prepend the message type and cookie
 	// SSH_MSG_KEXINIT = 20 (1 byte)
 	// cookie = 16 bytes
 	cookie := proto.GenerateCookie()
@@ -109,7 +116,7 @@ func ExchangeNegotiationMessage(si *info.ServerInfo, ci *info.ServerClientInfo) 
 
 	msg_b := sanm.Marshall()
 	b = append(b, msg_b...)
-
+	si.KInitMSG = b
 	b = proto.SignServerDSA(b, si.DSAPrivKey)
 	_, err := ci.Conn.Write(b)
 	if err != nil {
@@ -123,14 +130,15 @@ func ExchangeNegotiationMessage(si *info.ServerInfo, ci *info.ServerClientInfo) 
 	if err != nil {
 		fmt.Println("Error receiving algorithm negotiation message:", err.Error())
 		return false
-	} 
-
+	}
 	// unmarshall client's negotiation message
-	canm, err := proto.UnmarshallClientNegotiation(b)
+	canm, len, err := proto.UnmarshallClientNegotiation(b)
 	if err != nil {
 		fmt.Println("Error unmarshalling client's algorithm negotiation message:", err.Error())
 		return false
 	}
+
+	ci.ClientKInitMSG = b[:len+1]
 
 	// do the algorithm negotiation
 	agreed, err := proto.DoNegotiation(canm, sanm)
@@ -158,7 +166,6 @@ func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {
 
 	fmt.Println("Protocol version exchange successful with client", ci.ID)
 
-
 	// exchange algorithm negotiation message
 	if !ExchangeNegotiationMessage(si, ci) {
 		fmt.Println("Algorithm negotiation failed")
@@ -171,12 +178,23 @@ func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {
 
 	// key exchange
 
-	if !proto.Do_KEX_Server(si.ClientsAlgorithms[ci.ID].Kex_algorithm)(ci.Conn) {
+	kex_algo := si.ClientsAlgorithms[ci.ID].Kex_algorithm
+	group := proto.GetDHGroup(kex_algo)
+
+	k, exh, suc := proto.Do_KEX_Server(si.ClientsAlgorithms[ci.ID].Kex_algorithm)(ci.Conn, group,
+		si.PVM, ci.PVM, si.KInitMSG, ci.ClientKInitMSG,
+		si.DSAPubKey, si.DSAPrivKey) 
+	
+	if !suc {
 		fmt.Println("Key exchange failed")
 		// close connection
 		ci.Conn.Close()
 		return
 	}
+
+	// store shared secret and exchange hash
+	ci.SharedSecret = k
+	ci.ExchangeHash = exh
 
 	fmt.Println("Key exchange successful with client", ci.ID)
 }

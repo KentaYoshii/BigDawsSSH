@@ -23,14 +23,14 @@ func DoConnect(s_address string, s_port string) (*net.TCPConn, error) {
 	return conn, nil
 }
 
-func DoProtocolVersionExchange(csi *info.ClientServerInfo) bool {
+func DoProtocolVersionExchange(csi *info.ClientServerInfo, cci *info.ClientClientInfo) bool {
 
 	conn := csi.ServerConn
 	dsaPubKey := csi.ServerDSAPubKey
 
 	// create client's protocol version message
 	client_pvm := proto.CreateProtocolVersionMessage()
-
+	cci.ClientPVM = client_pvm
 	// send client's protocol version raw
 	b := client_pvm.Marshall()
 	_, err := conn.Write(b)
@@ -41,7 +41,7 @@ func DoProtocolVersionExchange(csi *info.ClientServerInfo) bool {
 
 	// read server's protocol version which should be digitally signed with server's DSA private key
 	buf := make([]byte, 1024)
-    _, err = conn.Read(buf)
+	_, err = conn.Read(buf)
 	if err != nil {
 		fmt.Println("Read from server failed:", err.Error())
 		return false
@@ -52,9 +52,12 @@ func DoProtocolVersionExchange(csi *info.ClientServerInfo) bool {
 	if !suc {
 		fmt.Println("DSA Verify failed")
 		return false
-	} 
+	}
 	// unmarshall server's protocol version
-	_, err = client_pvm.UnmarshallAndVerify(msg)
+	sPVM, _, err := client_pvm.UnmarshallAndVerify(msg)
+
+	// store server's protocol version message
+	csi.PVM = sPVM
 
 	return err == nil
 }
@@ -63,6 +66,15 @@ func DoAlgorithmNegotiation(csi *info.ClientServerInfo, cci *info.ClientClientIn
 
 	conn := csi.ServerConn
 	dsaPubKey := csi.ServerDSAPubKey
+
+	// prepend the message type and cookie
+	// SSH_MSG_KEXINIT = 20 (1 byte)
+	// cookie = 16 bytes
+	cookie := proto.GenerateCookie()
+
+	b := make([]byte, 0)
+	b = append(b, util.SSH_MSG_KEXINIT)
+	b = append(b, cookie...)
 
 	// Create client's algorithm negotiation message
 	canm := proto.CreateClientAlgorithmNegotiationMessage()
@@ -75,16 +87,10 @@ func DoAlgorithmNegotiation(csi *info.ClientServerInfo, cci *info.ClientClientIn
 	canm.Languages_client_to_server = cci.Languages_client_to_server
 	canm.First_kex_packet_follows = cci.First_kex_packet_follows
 
-	// header
-	head := make([]byte, 17)
-	head[0] = util.SSH_MSG_KEXINIT
-	// cookie
-	cookie := proto.GenerateCookie()
-	copy(head[1:17], cookie[:])
-
 	// Send client's algorithm negotiation message
 	msg_b := canm.Marshall()
-	b := append(head, msg_b...)
+	b = append(b, msg_b...)
+	cci.ClientKInitMSG = b
 	_, err := conn.Write(b)
 	if err != nil {
 		fmt.Println("Write to server failed:", err.Error())
@@ -105,7 +111,7 @@ func DoAlgorithmNegotiation(csi *info.ClientServerInfo, cci *info.ClientClientIn
 		fmt.Println("DSA Verify failed")
 		return false
 	}
-
+	csi.KInitMSG = msg
 	// Unmarshall server's algorithm negotiation message
 	sanm, err := proto.UnmarshallServerNegotiation(msg)
 	if err != nil {

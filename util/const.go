@@ -17,4 +17,5 @@ const (
 
 	// 30 ~ 49 are for key exchange
 	SSH_MSG_KEXDH_INIT    = 30
+	SSH_MSG_KEXDH_REPLY   = 31
 )

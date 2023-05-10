@@ -19,7 +19,7 @@ type ProtocolVersionMessage struct {
 	Comments        []string // Additional info
 }
 
-type SignedProtocolVersionMessage struct {
+type SignedMessage struct {
 	MessageLength uint32
 	MessageBytes []byte
 	SignatureLength uint32
@@ -227,7 +227,7 @@ func (canm *ClientAlgorithmNegotiationMessage) Marshall() []byte {
 	return buf.Bytes()
 }
 
-func UnmarshallClientNegotiation(buf []byte) (*ClientAlgorithmNegotiationMessage, error){
+func UnmarshallClientNegotiation(buf []byte) (*ClientAlgorithmNegotiationMessage, uint32, error){
 
 	canm := &ClientAlgorithmNegotiationMessage{}
 
@@ -235,7 +235,7 @@ func UnmarshallClientNegotiation(buf []byte) (*ClientAlgorithmNegotiationMessage
 
 	// First byte is the message type
 	if buf[0] != util.SSH_MSG_KEXINIT {
-		return nil, errors.New("invalid message type")
+		return nil, 0, errors.New("invalid message type")
 	}
 
 	// Skip the message type
@@ -287,11 +287,11 @@ func UnmarshallClientNegotiation(buf []byte) (*ClientAlgorithmNegotiationMessage
 		canm.First_kex_packet_follows = false
 	}
 
-	return canm, nil
+	return canm, curr, nil
 }
 
 func SignServerDSA(msg_bytes []byte, privKey *dsa.PrivateKey) []byte {
-	ret := &SignedProtocolVersionMessage{}
+	ret := &SignedMessage{}
 	ret.MessageLength = uint32(len(msg_bytes))
 	ret.MessageBytes = msg_bytes
 	sig, err := DSASign(msg_bytes, privKey)
@@ -308,7 +308,7 @@ func SignServerDSA(msg_bytes []byte, privKey *dsa.PrivateKey) []byte {
 // + message length bytes
 // + 4 bytes for signature length
 // + signature length bytes
-func (spvm *SignedProtocolVersionMessage) Marshall() []byte {
+func (spvm *SignedMessage) Marshall() []byte {
 	data := make([]byte, 4+spvm.MessageLength+4+spvm.SignatureLength)
 	binary.BigEndian.PutUint32(data, spvm.MessageLength)
 	copy(data[4:], spvm.MessageBytes)
@@ -369,14 +369,14 @@ func (pvm *ProtocolVersionMessage) Marshall() []byte {
 
 // Function that verifies the protocol version message has the following format
 // SSH-Version-SofwareVersion<CR><LF> or SSH-Version-SofwareVersion comments<CR><LF>
-func (pvm *ProtocolVersionMessage) UnmarshallAndVerify(data []byte) ([]string, error) {
+func (pvm *ProtocolVersionMessage) UnmarshallAndVerify(data []byte) (*ProtocolVersionMessage, []string, error) {
 	// Read the size
 	sz := binary.BigEndian.Uint32(data[:4])
 	// Read the string
 	s := string(data[4 : sz+4])
 	// Verify that the string ends with <CR><LF>
 	if s[len(s)-1] != '\n' || s[len(s)-2] != '\r' {
-		return nil, errors.New("error: protocol version message does not end with <CR><LF>")
+		return nil, nil, errors.New("error: protocol version message does not end with <CR><LF>")
 	}
 	// Split the string into the first half and second half
 	split_one := strings.Split(s, " ")
@@ -409,16 +409,23 @@ func (pvm *ProtocolVersionMessage) UnmarshallAndVerify(data []byte) ([]string, e
 	}
 
 	if proto != pvm.Proto {
-		return nil, errors.New("error: protocol version message does not start with 'SSH'")
+		return nil, nil, errors.New("error: protocol version message does not start with 'SSH'")
 	}
 
 	if protoVersion != pvm.ProtoVersion {
-		return nil, errors.New("error: protocol version does not match")
+		return nil, nil, errors.New("error: protocol version does not match")
 	}
 
 	if softwareVersion != pvm.SoftwareVersion {
-		return nil, errors.New("error: software version does not match")
+		return nil, nil, errors.New("error: software version does not match")
 	}
 
-	return comments, nil
+	protoVM := &ProtocolVersionMessage{
+		Proto:           proto,
+		ProtoVersion:    protoVersion,
+		SoftwareVersion: softwareVersion,
+		Comments:        comments,
+	}
+
+	return protoVM, comments, nil
 }

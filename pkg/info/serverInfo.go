@@ -8,6 +8,7 @@ import (
 	"os"
 	protocol "ssh/pkg/protocol"
 	"sync"
+	dh "github.com/monnand/dhkx"
 )
 
 type ClientServerInfo struct {
@@ -15,6 +16,10 @@ type ClientServerInfo struct {
 	ServerDSAPubKey *dsa.PublicKey
 	ServerConn      *net.TCPConn
 	AgreedAlgorithm *protocol.AgreedNegotiation
+	PVM             *protocol.ProtocolVersionMessage
+	KInitMSG		[]byte
+	SharedSecret  	*dh.DHKey
+	ExchangeHash  	[]byte
 }
 
 type ServerInfo struct {
@@ -41,7 +46,8 @@ type ServerInfo struct {
 	DSAPubKey  *dsa.PublicKey
 
 	// Protocol
-	PVM *protocol.ProtocolVersionMessage
+	PVM      *protocol.ProtocolVersionMessage
+	KInitMSG []byte
 
 	// Name-Lists (comma-separated string)
 	// Supported algorithm on the ssh server in the order of preference
