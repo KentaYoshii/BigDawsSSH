@@ -222,12 +222,15 @@ func DH_KEX_Server(conn *net.TCPConn, group int,
 	hPubKey *dsa.PublicKey, hPriKey *dsa.PrivateKey) (*dh.DHKey, []byte, bool) {
 
 	// Step 1 - Receive client's public key
-	buf := make([]byte, 4096)
+	buf := make([]byte, util.MAX_PACKET_SIZE)
 	_, err := conn.Read(buf)
 	if err != nil {
 		fmt.Println("Read from client failed:", err.Error())
 		return nil, nil, false
 	}
+
+	binPacket, _ := UnmarshallBinaryPacket(buf)
+	buf = binPacket.Payload
 
 	initMsg, err := UnmarshallInitMessage(buf)
 	if err != nil {
@@ -294,6 +297,9 @@ func DH_KEX_Server(conn *net.TCPConn, group int,
 
 	b := response.Marshall()
 
+	binPacket = CreateBinPacket(b, nil)
+	b = binPacket.Marshall()
+
 	_, err = conn.Write(b)
 	if err != nil {
 		fmt.Println("Write to client failed:", err.Error())
@@ -326,6 +332,10 @@ func DH_KEX_Client(conn *net.TCPConn, group int,
 	}
 
 	b := initMsg.Marshall()
+	
+	binPacket := CreateBinPacket(b, nil)
+	b = binPacket.Marshall()
+
 	_, err := conn.Write(b)
 	if err != nil {
 		fmt.Println("Write to server failed:", err.Error())
@@ -333,12 +343,15 @@ func DH_KEX_Client(conn *net.TCPConn, group int,
 	}
 
 	// Step 2 - Receive server's REPLY to KEXINIT
-	buf := make([]byte, 4096)
+	buf := make([]byte, util.MAX_PACKET_SIZE)
 	_, err = conn.Read(buf)
 	if err != nil {
 		fmt.Println("Read from server failed:", err.Error())
 		return nil, nil, false
 	}
+
+	binPacket, _ = UnmarshallBinaryPacket(buf)
+	buf = binPacket.Payload
 
 	reply, err := UnmarshallReplyMessage(buf)
 	if err != nil {

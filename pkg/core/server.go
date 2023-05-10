@@ -118,6 +118,10 @@ func ExchangeNegotiationMessage(si *info.ServerInfo, ci *info.ServerClientInfo) 
 	b = append(b, msg_b...)
 	si.KInitMSG = b
 	b = proto.SignServerDSA(b, si.DSAPrivKey)
+
+	// Binary Packet Protocol
+	binPacket := proto.CreateBinPacket(b, nil)
+	b = binPacket.Marshall()
 	_, err := ci.Conn.Write(b)
 	if err != nil {
 		fmt.Println("Error sending algorithm negotiation message:", err.Error())
@@ -125,12 +129,15 @@ func ExchangeNegotiationMessage(si *info.ServerInfo, ci *info.ServerClientInfo) 
 	}
 
 	// receive client's algorithm negotiation message
-	b = make([]byte, 256)
+	b = make([]byte, util.MAX_PACKET_SIZE)
 	_, err = ci.Conn.Read(b)
 	if err != nil {
 		fmt.Println("Error receiving algorithm negotiation message:", err.Error())
 		return false
 	}
+
+	binPacket, _ = proto.UnmarshallBinaryPacket(b)
+	b = binPacket.Payload
 	// unmarshall client's negotiation message
 	canm, len, err := proto.UnmarshallClientNegotiation(b)
 	if err != nil {
@@ -195,6 +202,9 @@ func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {
 	// store shared secret and exchange hash
 	ci.SharedSecret = k
 	ci.ExchangeHash = exh
+	ci.SessionIdentifier = exh
+
+	ci.Status = "KEXed"
 
 	fmt.Println("Key exchange successful with client", ci.ID)
 }

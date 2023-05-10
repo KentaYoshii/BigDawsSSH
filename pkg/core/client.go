@@ -91,6 +91,11 @@ func DoAlgorithmNegotiation(csi *info.ClientServerInfo, cci *info.ClientClientIn
 	msg_b := canm.Marshall()
 	b = append(b, msg_b...)
 	cci.ClientKInitMSG = b
+
+	// Binary Packet Protocol
+	binPacket := proto.CreateBinPacket(b, nil)
+	b = binPacket.Marshall()
+
 	_, err := conn.Write(b)
 	if err != nil {
 		fmt.Println("Write to server failed:", err.Error())
@@ -98,15 +103,18 @@ func DoAlgorithmNegotiation(csi *info.ClientServerInfo, cci *info.ClientClientIn
 	}
 
 	// Read server's algorithm negotiation message
-	buf := make([]byte, 1024)
+	buf := make([]byte, util.MAX_PACKET_SIZE)
 	_, err = conn.Read(buf)
 	if err != nil {
 		fmt.Println("Read from server failed:", err.Error())
 		return false
 	}
 
+	binPacket, _  = proto.UnmarshallBinaryPacket(buf)
+	payload := binPacket.Payload
+
 	// DSA verify server's message
-	msg, suc := proto.VerifyServerDSASignature(buf, dsaPubKey)
+	msg, suc := proto.VerifyServerDSASignature(payload, dsaPubKey)
 	if !suc {
 		fmt.Println("DSA Verify failed")
 		return false

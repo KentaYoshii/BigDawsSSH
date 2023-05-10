@@ -3,8 +3,9 @@ package protocol
 import (
 	util "ssh/util"
 	mrand "math/rand"
-	crand "crypto/rand"
     "time"
+	"bytes"
+	"encoding/binary"
 )
 
 type BinaryPacket struct {
@@ -32,24 +33,62 @@ func GenerateCookie() []byte {
 	return cookie
 }
 
-// Function that generates a random padding of length 4 <= padding_length <= 255
-func GenerateRandomPadding() []byte {
-	// Seed the random number generator with the current time
-    r := mrand.New(mrand.NewSource(time.Now().UnixNano()))
+func GenerateRandomPadding(sz uint8) []byte {
+	r := mrand.New(mrand.NewSource(time.Now().UnixNano()))
+	padding := make([]byte, sz)
+	r.Read(padding)
+	return padding
+}
 
-    // Generate a random integer between 0 and 14
-    randomOffset := r.Intn(util.AES_BLOCK_SIZE-1) 
-
-    // Calculate the corresponding multiple of 16 between 4 and 255
-    randomInt := (randomOffset * 16) + util.AES_BLOCK_SIZE
-
-	if randomInt % util.AES_BLOCK_SIZE != 0 {
-		panic("error: randomInt is not a multiple of 16")
+func CreateBinPacket(payload []byte, mac []byte) *BinaryPacket {
+	bp := &BinaryPacket{}
+	bp.Payload = payload
+	pay_len := uint32(len(payload))
+	// 4 bytes for packet length (uint32)
+	// 1 for padding length (uint8)
+	// 4 minimum for padding
+	curr := pay_len + 4 + 1 + 4
+	if curr % 16 == 0 {
+		bp.Padding_Length = 4
+	} else {
+		bp.Padding_Length = uint8(16 - (curr % 16))
+		if bp.Padding_Length < 4 {
+			bp.Padding_Length += 16
+		}
 	}
+	bp.Padding = GenerateRandomPadding(bp.Padding_Length)
+	// Generate random padding
+	bp.Padding = make([]byte, 0)
+	bp.Packet_Length = uint32(bp.Padding_Length) + pay_len + 1
+	bp.MAC = mac
+	return bp
+}
 
-	// Create a random byte array of the appropriate length
-	randomPadding := make([]byte, randomInt)
-	crand.Read(randomPadding)
+func (bp *BinaryPacket) Marshall() []byte {
+	b := new(bytes.Buffer)
+	binary.Write(b, binary.BigEndian, bp.Packet_Length)
+	binary.Write(b, binary.BigEndian, bp.Padding_Length)
+	b.Write(bp.Payload)
+	b.Write(bp.Padding)
+	b.Write(bp.MAC)
+	return b.Bytes()
+}
 
-	return randomPadding
+// [000 000 000 012 7 a b c d ass fkje efjk kjef kjfk jkej gjkj]
+// packet length = 12
+// padding length = 7
+func UnmarshallBinaryPacket(b []byte) (*BinaryPacket, error) {
+	var curr uint32 = 0
+	bp := &BinaryPacket{}
+	bp.Packet_Length = binary.BigEndian.Uint32(b[curr:curr+4])
+	curr += 4
+	bp.Padding_Length = b[curr]
+	curr += 1
+	pay_len := bp.Packet_Length - uint32(bp.Padding_Length) - 1
+	bp.Payload = b[curr:curr + pay_len]
+	curr += uint32(len(bp.Payload))
+	bp.Padding = b[curr:curr + uint32(bp.Padding_Length)]
+	curr += uint32(len(bp.Padding))
+	bp.MAC = b[curr:curr + util.MAC_LENGTH]
+	return bp, nil
 }

@@ -4,7 +4,9 @@ const (
 	PADDING_MIN_LENGTH = 4
 	AES_BLOCK_SIZE     = 16
 	COOKIE_SIZE        = 16
+	MAC_LENGTH         = 20
 	PADDING_MAX_LENGTH = 255
+	MAX_PACKET_SIZE    = 35000
 
 	SSH_MSG_DISCONNECT      = 1
 	SSH_MSG_IGNORE          = 2
@@ -16,6 +18,6 @@ const (
 	SSH_MSG_NEWKEYS         = 21
 
 	// 30 ~ 49 are for key exchange
-	SSH_MSG_KEXDH_INIT    = 30
-	SSH_MSG_KEXDH_REPLY   = 31
+	SSH_MSG_KEXDH_INIT  = 30
+	SSH_MSG_KEXDH_REPLY = 31
 )

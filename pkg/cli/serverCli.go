@@ -262,7 +262,7 @@ func DoList(si *info.ServerInfo) error {
 		fmt.Print(idColor.Sprintf("| "))
 		addrColor.Printf("%-25s", c.Address)
 		fmt.Print(addrColor.Sprintf(" | "))
-		statusColor.Printf("%-8d", c.Status)
+		statusColor.Printf("%-8s", c.Status)
 		fmt.Println(statusColor.Sprintf(" |"))
 	}
 

@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	proto "ssh/pkg/protocol"
+
 	dh "github.com/monnand/dhkx"
 )
 
@@ -14,13 +15,14 @@ type ServerClientInfo struct {
 	ID      int
 	Address string
 	Conn    *net.TCPConn
-	Status  int
+	Status  string
 
 	// Kex
-	PVM            *proto.ProtocolVersionMessage
-	ClientKInitMSG []byte
-	SharedSecret   *dh.DHKey
-	ExchangeHash   []byte
+	PVM               *proto.ProtocolVersionMessage
+	ClientKInitMSG    []byte
+	SharedSecret      *dh.DHKey
+	ExchangeHash      []byte
+	SessionIdentifier []byte // Identifier for this session set to the first hash output of the KEX. IMMUTABLE
 }
 
 type ClientClientInfo struct {
@@ -42,7 +44,7 @@ func CreateNewClientInfo(id int, address string, conn *net.TCPConn) *ServerClien
 		ID:      id,
 		Address: address,
 		Conn:    conn,
-		Status:  0,
+		Status:  "init",
 	}
 }
 

@@ -19,6 +19,7 @@ type ProtocolVersionMessage struct {
 	Comments        []string // Additional info
 }
 
+// For server host authentication via DSA
 type SignedMessage struct {
 	MessageLength uint32
 	MessageBytes []byte
@@ -26,7 +27,7 @@ type SignedMessage struct {
 	Signature    []byte
 }
 
-// Message that gets exchanged between client and server upon connection and after the ProtocolVersionMessage
+// Message structs for Algorithm Negotiation
 type ClientAlgorithmNegotiationMessage struct {
 	Kex_algorithms                          []string
 	Server_host_key_algorithms              []string
@@ -116,7 +117,6 @@ func (sanm *ServerAlgorithmNegotiationMessage) Marshall() []byte {
 	} else {
 		binary.Write(buf, binary.BigEndian, uint8(0))
 	}
-
 	return buf.Bytes()
 }
 
@@ -290,6 +290,7 @@ func UnmarshallClientNegotiation(buf []byte) (*ClientAlgorithmNegotiationMessage
 	return canm, curr, nil
 }
 
+// Function that DSA signs a message and returns the signature
 func SignServerDSA(msg_bytes []byte, privKey *dsa.PrivateKey) []byte {
 	ret := &SignedMessage{}
 	ret.MessageLength = uint32(len(msg_bytes))
@@ -304,10 +305,7 @@ func SignServerDSA(msg_bytes []byte, privKey *dsa.PrivateKey) []byte {
 	return ret.Marshall()
 }
 
-// 4 bytes for message length
-// + message length bytes
-// + 4 bytes for signature length
-// + signature length bytes
+
 func (spvm *SignedMessage) Marshall() []byte {
 	data := make([]byte, 4+spvm.MessageLength+4+spvm.SignatureLength)
 	binary.BigEndian.PutUint32(data, spvm.MessageLength)
@@ -317,6 +315,7 @@ func (spvm *SignedMessage) Marshall() []byte {
 	return data
 }
 
+// Function that verifies a DSA signature
 func VerifyServerDSASignature(buf []byte, pubKey *dsa.PublicKey) ([]byte, bool) {
 	// read the first 4 bytes
 	msg_len := binary.BigEndian.Uint32(buf[:4])
