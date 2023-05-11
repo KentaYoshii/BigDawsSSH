@@ -120,7 +120,7 @@ func ExchangeNegotiationMessage(si *info.ServerInfo, ci *info.ServerClientInfo) 
 	b = proto.SignServerDSA(b, si.DSAPrivKey)
 
 	// Binary Packet Protocol
-	binPacket := proto.CreateBinPacket(b)
+	binPacket := proto.CreateBinPacket(b, 16)
 	b = binPacket.Marshall()
 	_, err := ci.Conn.Write(b)
 	if err != nil {
@@ -162,6 +162,10 @@ func ExchangeNegotiationMessage(si *info.ServerInfo, ci *info.ServerClientInfo) 
 }
 
 func ExchangeServiceMessage(si *info.ServerInfo, ci *info.ServerClientInfo) bool {
+
+	enc_algo := si.ClientsAlgorithms[ci.ID].Encryption_algorithm
+	mac_algo := si.ClientsAlgorithms[ci.ID].Mac_algorithm
+
 	// read service request message
 	b := make([]byte, util.MAX_PACKET_SIZE)
 	_, err := ci.Conn.Read(b)
@@ -171,7 +175,7 @@ func ExchangeServiceMessage(si *info.ServerInfo, ci *info.ServerClientInfo) bool
 	}
 	recvEncryptedPacket, _ := proto.UnmarshallEncryptedBinaryPacket(b)
 	binPacket, err := proto.DecryptAndVerify(recvEncryptedPacket, ci.Keys.EncKey_C2S,
-		ci.Keys.IntKey_C2S, ci.Keys.IV_C2S, ci.ClientSeqNum)
+		ci.Keys.IntKey_C2S, ci.Keys.IV_C2S, ci.ClientSeqNum, enc_algo, mac_algo)
 	if err != nil {
 		fmt.Println("Error decrypting and verifying service request message:", err.Error())
 		return false
@@ -198,13 +202,14 @@ func ExchangeServiceMessage(si *info.ServerInfo, ci *info.ServerClientInfo) bool
 	}
 
 	b = sam.Marshall()
-	binPacket = proto.CreateBinPacket(b)
-	encryptedPacket, err := proto.EncryptAndMac(binPacket, ci.Keys.EncKey_S2C, ci.Keys.IntKey_S2C, ci.Keys.IV_S2C, ci.ServerSeqNum)
+	binPacket = proto.CreateBinPacket(b, uint32(ci.BLK_SIZE))
+	encryptedPacket, err := proto.EncryptAndMac(binPacket, ci.Keys.EncKey_S2C, 
+		ci.Keys.IntKey_S2C, ci.Keys.IV_S2C, ci.ServerSeqNum, enc_algo, mac_algo)
 	if err != nil {
 		fmt.Println("Error encrypting and macing service accept message:", err.Error())
 		return false
 	}
-	
+
 	b = encryptedPacket.Marshall()
 	_, err = ci.Conn.Write(b)
 	if err != nil {
@@ -240,7 +245,7 @@ func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {
 	fmt.Println("Algorithm negotiation successful with client", ci.ID)
 
 	// key exchange
-
+	ci.BLK_SIZE = util.GetBlockSize(si.ClientsAlgorithms[ci.ID].Encryption_algorithm)
 	kex_algo := si.ClientsAlgorithms[ci.ID].Kex_algorithm
 	group := proto.GetDHGroup(kex_algo)
 

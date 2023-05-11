@@ -43,19 +43,19 @@ func GenerateRandomPadding(sz uint8) []byte {
 	return padding
 }
 
-func CreateBinPacket(payload []byte) *BinaryPacket {
+func CreateBinPacket(payload []byte, blk_sz uint32) *BinaryPacket {
 	bp := &BinaryPacket{}
 	bp.Payload = payload
 	pay_len := uint32(len(payload))
 	// 4 bytes for packet length (uint32)
 	// 1 for padding length (uint8)
 	curr := pay_len + 4 + 1 
-	if curr%16 == 0 {
-		bp.Padding_Length = 16 // 4 byte minimum padding
+	if curr%blk_sz == 0 {
+		bp.Padding_Length = uint8(blk_sz) // 4 byte minimum padding
 	} else {
-		bp.Padding_Length = uint8(16 - (curr % 16))
+		bp.Padding_Length = uint8(blk_sz - (curr % blk_sz))
 		if bp.Padding_Length < 4 {
-			bp.Padding_Length += 16
+			bp.Padding_Length += uint8(blk_sz)
 		}
 	}
 	bp.Padding = GenerateRandomPadding(bp.Padding_Length)

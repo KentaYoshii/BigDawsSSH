@@ -6,6 +6,7 @@ import (
 	core "ssh/pkg/core"
 	info "ssh/pkg/info"
 	proto "ssh/pkg/protocol"
+	"ssh/util"
 )
 
 func main() {
@@ -56,6 +57,7 @@ func main() {
 
 	fmt.Printf("Algorithm negotiation successful\n")
 
+	csi.BLK_SIZE = util.GetBlockSize(csi.AgreedAlgorithm.Encryption_algorithm)
 	kex_algo := csi.AgreedAlgorithm.Kex_algorithm
 	group := proto.GetDHGroup(kex_algo)
 

@@ -93,7 +93,7 @@ func DoAlgorithmNegotiation(csi *info.ClientServerInfo, cci *info.ClientClientIn
 	cci.ClientKInitMSG = b
 
 	// Binary Packet Protocol
-	binPacket := proto.CreateBinPacket(b)
+	binPacket := proto.CreateBinPacket(b, 16)
 	b = binPacket.Marshall()
 
 	_, err := conn.Write(b)
@@ -110,7 +110,7 @@ func DoAlgorithmNegotiation(csi *info.ClientServerInfo, cci *info.ClientClientIn
 		return false
 	}
 
-	binPacket, _  = proto.UnmarshallBinaryPacket(buf)
+	binPacket, _ = proto.UnmarshallBinaryPacket(buf)
 	payload := binPacket.Payload
 
 	// DSA verify server's message
@@ -139,6 +139,10 @@ func DoAlgorithmNegotiation(csi *info.ClientServerInfo, cci *info.ClientClientIn
 }
 
 func DoServiceRequest(cci *info.ClientClientInfo, csi *info.ClientServerInfo, service string) bool {
+
+	enc_algo := csi.AgreedAlgorithm.Encryption_algorithm
+	mac_algo := csi.AgreedAlgorithm.Mac_algorithm
+
 	serviceReq := &proto.ServiceRequestMessage{
 		MessageType: util.SSH_MSG_SERVICE_REQUEST,
 	}
@@ -148,8 +152,9 @@ func DoServiceRequest(cci *info.ClientClientInfo, csi *info.ClientServerInfo, se
 	}
 	serviceReq.ServiceName = service
 	msg_b := serviceReq.Marshall()
-	binPacket := proto.CreateBinPacket(msg_b)
-	encryptedBinaryPacket, err := proto.EncryptAndMac(binPacket, csi.Keys.EncKey_C2S, csi.Keys.IntKey_C2S, csi.Keys.IV_C2S, csi.ClientSeqNum)
+	binPacket := proto.CreateBinPacket(msg_b, uint32(csi.BLK_SIZE))
+	encryptedBinaryPacket, err := proto.EncryptAndMac(binPacket, csi.Keys.EncKey_C2S,
+		csi.Keys.IntKey_C2S, csi.Keys.IV_C2S, csi.ClientSeqNum, enc_algo, mac_algo)
 	if err != nil {
 		fmt.Println("Encrypt and mac failed")
 		return false
@@ -170,12 +175,13 @@ func DoServiceRequest(cci *info.ClientClientInfo, csi *info.ClientServerInfo, se
 		return false
 	}
 	encryptedPacket, _ := proto.UnmarshallEncryptedBinaryPacket(buf)
-	binPacket, err = proto.DecryptAndVerify(encryptedPacket, csi.Keys.EncKey_S2C, csi.Keys.IntKey_S2C, csi.Keys.IV_S2C, csi.ServerSeqNum)
+	binPacket, err = proto.DecryptAndVerify(encryptedPacket, csi.Keys.EncKey_S2C,
+		csi.Keys.IntKey_S2C, csi.Keys.IV_S2C, csi.ServerSeqNum, enc_algo, mac_algo)
 	if err != nil {
 		fmt.Println("Decrypt and verify failed")
 		return false
 	}
-	
+
 	csi.ServerSeqNum++
 
 	payload := binPacket.Payload

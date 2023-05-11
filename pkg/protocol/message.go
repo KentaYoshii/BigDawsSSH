@@ -1,17 +1,18 @@
 package protocol
 
 import (
+	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/des"
 	"crypto/dsa"
+	"crypto/hmac"
+	"crypto/sha1"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"strings"
-	"bytes"
 	"ssh/util"
-	"crypto/hmac"
-	"crypto/sha1"
-	"crypto/aes"
-	"crypto/cipher"
+	"strings"
 )
 
 // Message that gets exchanged between client and server upon connection
@@ -35,10 +36,10 @@ type ServiceAcceptMessage struct {
 
 // For server host authentication via DSA
 type SignedMessage struct {
-	MessageLength uint32
-	MessageBytes []byte
+	MessageLength   uint32
+	MessageBytes    []byte
 	SignatureLength uint32
-	Signature    []byte
+	Signature       []byte
 }
 
 // Message structs for Algorithm Negotiation
@@ -99,9 +100,9 @@ func UnmarshallServiceAccept(buf []byte) *ServiceAcceptMessage {
 	curr := 0
 	sAcc.MessageType = buf[curr]
 	curr += 1
-	str_len := binary.BigEndian.Uint32(buf[curr:curr+4])
+	str_len := binary.BigEndian.Uint32(buf[curr : curr+4])
 	curr += 4
-	sAcc.ServiceName = string(buf[curr:curr+int(str_len)])
+	sAcc.ServiceName = string(buf[curr : curr+int(str_len)])
 	return sAcc
 }
 
@@ -118,17 +119,16 @@ func UnmarshallServiceRequest(buf []byte) *ServiceRequestMessage {
 	curr := 0
 	sReq.MessageType = buf[curr]
 	curr += 1
-	str_len := binary.BigEndian.Uint32(buf[curr:curr+4])
+	str_len := binary.BigEndian.Uint32(buf[curr : curr+4])
 	curr += 4
-	sReq.ServiceName = string(buf[curr:curr+int(str_len)])
+	sReq.ServiceName = string(buf[curr : curr+int(str_len)])
 	return sReq
 }
-
 
 // marshalls the message into a byte array
 // size of each namelist always precedes the namelist
 func (sanm *ServerAlgorithmNegotiationMessage) Marshall() []byte {
-	
+
 	buf := new(bytes.Buffer)
 
 	// Kex_algorithms
@@ -191,38 +191,38 @@ func UnmarshallServerNegotiation(buf []byte) (*ServerAlgorithmNegotiationMessage
 	curr += 16
 
 	// Kex_algorithms
-	kex_len := binary.BigEndian.Uint32(buf[curr:curr+4]) // get the length of the namelist
-	kex_algorithms := string(buf[curr+4:curr+kex_len+4]) // get the namelist
+	kex_len := binary.BigEndian.Uint32(buf[curr : curr+4])   // get the length of the namelist
+	kex_algorithms := string(buf[curr+4 : curr+kex_len+4])   // get the namelist
 	sanm.Kex_algorithms = strings.Split(kex_algorithms, ",") // split the namelist into a slice
-	curr += uint32(kex_len) + 4 // update the current position
+	curr += uint32(kex_len) + 4                              // update the current position
 
 	// Server_host_key_algorithms
-	host_key_len := binary.BigEndian.Uint32(buf[curr:curr+4])
-	host_key_algorithms := string(buf[curr+4:curr+host_key_len+4])
+	host_key_len := binary.BigEndian.Uint32(buf[curr : curr+4])
+	host_key_algorithms := string(buf[curr+4 : curr+host_key_len+4])
 	sanm.Server_host_key_algorithms = strings.Split(host_key_algorithms, ",")
 	curr += uint32(host_key_len) + 4
 
 	// Encryption_algorithms_server_to_client
-	enc_len := binary.BigEndian.Uint32(buf[curr:curr+4])
-	enc_algorithms := string(buf[curr+4:curr+enc_len+4])
+	enc_len := binary.BigEndian.Uint32(buf[curr : curr+4])
+	enc_algorithms := string(buf[curr+4 : curr+enc_len+4])
 	sanm.Encryption_algorithms_server_to_client = strings.Split(enc_algorithms, ",")
 	curr += uint32(enc_len) + 4
 
 	// Mac_algorithms_server_to_client
-	mac_len := binary.BigEndian.Uint32(buf[curr:curr+4])
-	mac_algorithms := string(buf[curr+4:curr+mac_len+4])
+	mac_len := binary.BigEndian.Uint32(buf[curr : curr+4])
+	mac_algorithms := string(buf[curr+4 : curr+mac_len+4])
 	sanm.Mac_algorithms_server_to_client = strings.Split(mac_algorithms, ",")
 	curr += uint32(mac_len) + 4
 
 	// Compression_algorithms_server_to_client
-	compression_len := binary.BigEndian.Uint32(buf[curr:curr+4])
-	compression_algorithms := string(buf[curr+4:curr+compression_len+4])
+	compression_len := binary.BigEndian.Uint32(buf[curr : curr+4])
+	compression_algorithms := string(buf[curr+4 : curr+compression_len+4])
 	sanm.Compression_algorithms_server_to_client = strings.Split(compression_algorithms, ",")
 	curr += uint32(compression_len) + 4
 
 	// Languages_server_to_client
-	languages_len := binary.BigEndian.Uint32(buf[curr:curr+4])
-	languages := string(buf[curr+4:curr+languages_len+4])
+	languages_len := binary.BigEndian.Uint32(buf[curr : curr+4])
+	languages := string(buf[curr+4 : curr+languages_len+4])
 	sanm.Languages_server_to_client = strings.Split(languages, ",")
 	curr += uint32(languages_len) + 4
 
@@ -280,7 +280,7 @@ func (canm *ClientAlgorithmNegotiationMessage) Marshall() []byte {
 	return buf.Bytes()
 }
 
-func UnmarshallClientNegotiation(buf []byte) (*ClientAlgorithmNegotiationMessage, uint32, error){
+func UnmarshallClientNegotiation(buf []byte) (*ClientAlgorithmNegotiationMessage, uint32, error) {
 
 	canm := &ClientAlgorithmNegotiationMessage{}
 
@@ -298,38 +298,38 @@ func UnmarshallClientNegotiation(buf []byte) (*ClientAlgorithmNegotiationMessage
 	curr += 16
 
 	// Kex_algorithms
-	kex_len := binary.BigEndian.Uint32(buf[curr:curr+4])
-	kex_algorithms := string(buf[curr+4:curr+kex_len+4])
+	kex_len := binary.BigEndian.Uint32(buf[curr : curr+4])
+	kex_algorithms := string(buf[curr+4 : curr+kex_len+4])
 	canm.Kex_algorithms = strings.Split(kex_algorithms, ",")
 	curr += uint32(kex_len) + 4
 
 	// Server_host_key_algorithms
-	host_key_len := binary.BigEndian.Uint32(buf[curr:curr+4])
-	host_key_algorithms := string(buf[curr+4:curr+host_key_len+4])
+	host_key_len := binary.BigEndian.Uint32(buf[curr : curr+4])
+	host_key_algorithms := string(buf[curr+4 : curr+host_key_len+4])
 	canm.Server_host_key_algorithms = strings.Split(host_key_algorithms, ",")
 	curr += uint32(host_key_len) + 4
 
 	// Encryption_algorithms_client_to_server
-	enc_len := binary.BigEndian.Uint32(buf[curr:curr+4])
-	enc_algorithms := string(buf[curr+4:curr+enc_len+4])
+	enc_len := binary.BigEndian.Uint32(buf[curr : curr+4])
+	enc_algorithms := string(buf[curr+4 : curr+enc_len+4])
 	canm.Encryption_algorithms_client_to_server = strings.Split(enc_algorithms, ",")
 	curr += uint32(enc_len) + 4
 
 	// Mac_algorithms_client_to_server
-	mac_len := binary.BigEndian.Uint32(buf[curr:curr+4])
-	mac_algorithms := string(buf[curr+4:curr+mac_len+4])
+	mac_len := binary.BigEndian.Uint32(buf[curr : curr+4])
+	mac_algorithms := string(buf[curr+4 : curr+mac_len+4])
 	canm.Mac_algorithms_client_to_server = strings.Split(mac_algorithms, ",")
 	curr += uint32(mac_len) + 4
 
 	// Compression_algorithms_client_to_server
-	compression_len := binary.BigEndian.Uint32(buf[curr:curr+4])
-	compression_algorithms := string(buf[curr+4:curr+compression_len+4])
+	compression_len := binary.BigEndian.Uint32(buf[curr : curr+4])
+	compression_algorithms := string(buf[curr+4 : curr+compression_len+4])
 	canm.Compression_algorithms_client_to_server = strings.Split(compression_algorithms, ",")
 	curr += uint32(compression_len) + 4
 
 	// Languages_client_to_server
-	languages_len := binary.BigEndian.Uint32(buf[curr:curr+4])
-	languages := string(buf[curr+4:curr+languages_len+4])
+	languages_len := binary.BigEndian.Uint32(buf[curr : curr+4])
+	languages := string(buf[curr+4 : curr+languages_len+4])
 	canm.Languages_client_to_server = strings.Split(languages, ",")
 	curr += uint32(languages_len) + 4
 
@@ -358,7 +358,6 @@ func SignServerDSA(msg_bytes []byte, privKey *dsa.PrivateKey) []byte {
 	return ret.Marshall()
 }
 
-
 func (spvm *SignedMessage) Marshall() []byte {
 	data := make([]byte, 4+spvm.MessageLength+4+spvm.SignatureLength)
 	binary.BigEndian.PutUint32(data, spvm.MessageLength)
@@ -373,11 +372,11 @@ func VerifyServerDSASignature(buf []byte, pubKey *dsa.PublicKey) ([]byte, bool) 
 	// read the first 4 bytes
 	msg_len := binary.BigEndian.Uint32(buf[:4])
 	// read the next msg_len bytes
-	msg_bytes := buf[4:msg_len+4]
+	msg_bytes := buf[4 : msg_len+4]
 	// read the next 4 bytes
-	sig_len := binary.BigEndian.Uint32(buf[msg_len+4:msg_len+8])
+	sig_len := binary.BigEndian.Uint32(buf[msg_len+4 : msg_len+8])
 	// read the next sig_len bytes
-	sig_bytes := buf[msg_len+8:msg_len+8+sig_len]
+	sig_bytes := buf[msg_len+8 : msg_len+8+sig_len]
 	// verify the signature
 	_, err := DSAVerify(msg_bytes, pubKey, sig_bytes)
 	if err != nil {
@@ -483,7 +482,7 @@ func (pvm *ProtocolVersionMessage) UnmarshallAndVerify(data []byte) (*ProtocolVe
 }
 
 // mac = MAC(key, sequence_number || unencrypted_packet)
-func ComputeMAC(bp *BinaryPacket, seqN uint32, macK []byte) ([]byte, error) {
+func ComputeMAC(bp *BinaryPacket, seqN uint32, macK []byte, mac_algo string) ([]byte, error) {
 	b := new(bytes.Buffer)
 	binary.Write(b, binary.BigEndian, seqN)
 	binary.Write(b, binary.BigEndian, bp.Packet_Length)
@@ -502,8 +501,8 @@ func ComputeMAC(bp *BinaryPacket, seqN uint32, macK []byte) ([]byte, error) {
 }
 
 // Function that verifies the MAC of a BinaryPacket
-func VerifyMAC(bp *BinaryPacket, seqN uint32, macK []byte, checkMAC []byte) bool {
-	mac, err := ComputeMAC(bp, seqN, macK)
+func VerifyMAC(bp *BinaryPacket, seqN uint32, macK []byte, checkMAC []byte, mac_algo string) bool {
+	mac, err := ComputeMAC(bp, seqN, macK, mac_algo)
 	if err != nil {
 		fmt.Println("error computing MAC:", err.Error())
 		return false
@@ -514,7 +513,7 @@ func VerifyMAC(bp *BinaryPacket, seqN uint32, macK []byte, checkMAC []byte) bool
 // When encryption is in effect, the packet length, padding
 // length, payload, and padding fields of each packet MUST be encrypted
 // with the given algorithm.
-func EncryptPacket(unencryptedBP *BinaryPacket, encK, startIV []byte) (ciphertext []byte, err error) {
+func EncryptPacket(unencryptedBP *BinaryPacket, encK, startIV []byte, algo string) (ciphertext []byte, err error) {
 	// first marshall the unencryptedBP (packet length, padding length, payload, padding)
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.BigEndian, unencryptedBP.Packet_Length)
@@ -522,69 +521,95 @@ func EncryptPacket(unencryptedBP *BinaryPacket, encK, startIV []byte) (ciphertex
 	buf.Write(unencryptedBP.Payload)
 	buf.Write(unencryptedBP.Padding)
 	b := buf.Bytes()
-	if len(b) % 16 != 0 {
+
+	blk_sz := util.GetBlockSize(algo)
+
+	if len(b)%int(blk_sz) != 0 {
 		fmt.Println("error: unencrypted packet length is not a multiple of 16")
 		return nil, errors.New("error: unencrypted packet length is not a multiple of 16")
 	}
 
 	ciphertext = make([]byte, len(b))
 
-	// encrypt the packet
-	block, err := aes.NewCipher(encK)
-	if err != nil {
-		fmt.Println("error creating cipher:", err.Error())
-		return nil, err
+	switch algo {
+	case "aes128-cbc", "aes256-cbc":
+		// encrypt the packet
+		block, err := aes.NewCipher(encK)
+		if err != nil {
+			fmt.Println("error creating cipher:", err.Error())
+			return nil, err
+		}
+		enc := cipher.NewCBCEncrypter(block, startIV)
+		enc.CryptBlocks(ciphertext, b)
+	case "3des-cbc":
+		block, err := des.NewTripleDESCipher(encK)
+		if err != nil {
+			return nil, err
+		}
+		mode := cipher.NewCBCEncrypter(block, startIV)
+		mode.CryptBlocks(ciphertext, b)
 	}
-	enc := cipher.NewCBCEncrypter(block, startIV)
-	enc.CryptBlocks(ciphertext, b)
 
 	return ciphertext, nil
 }
 
-func DecryptPacket(ciphertext, encK, startIV []byte) (plaintext []byte, err error) {
-	if len(ciphertext) % 16 != 0 {
+func DecryptPacket(ciphertext, encK, startIV []byte, algo string) (plaintext []byte, err error) {
+
+	blk_sz := util.GetBlockSize(algo)
+
+	if len(ciphertext)%int(blk_sz) != 0 {
 		fmt.Println("error: ciphertext length is not a multiple of 16")
 		return nil, errors.New("error: ciphertext length is not a multiple of 16")
 	}
 
 	plaintext = make([]byte, len(ciphertext))
 
-	// decrypt the packet
-	block, err := aes.NewCipher(encK)
-	if err != nil {
-		fmt.Println("error creating cipher:", err.Error())
-		return nil, err
+	switch algo {
+	case "aes128-cbc", "aes256-cbc":
+		// decrypt the packet
+		block, err := aes.NewCipher(encK)
+		if err != nil {
+			fmt.Println("error creating cipher:", err.Error())
+			return nil, err
+		}
+		dec := cipher.NewCBCDecrypter(block, startIV)
+		dec.CryptBlocks(plaintext, ciphertext)
+	case "3des-cbc":
+		block, err := des.NewTripleDESCipher(encK)
+		if err != nil {
+			return nil, err
+		}
+		decrypter := cipher.NewCBCDecrypter(block, startIV)
+		decrypter.CryptBlocks(plaintext, ciphertext)
 	}
-	dec := cipher.NewCBCDecrypter(block, startIV)
-	dec.CryptBlocks(plaintext, ciphertext)
 
 	return plaintext, nil
-}	
+}
 
-func EncryptAndMac(bp *BinaryPacket, encK, macK, startIV []byte, seqN uint32) (*EncryptedBinaryPacket, error) {
-	ciphertext, err := EncryptPacket(bp, encK, startIV)
+func EncryptAndMac(bp *BinaryPacket, encK, macK, startIV []byte, seqN uint32, enc_algo, mac_algo string) (*EncryptedBinaryPacket, error) {
+	ciphertext, err := EncryptPacket(bp, encK, startIV, enc_algo)
 	if err != nil {
 		fmt.Println("error encrypting packet:", err.Error())
 		return nil, err
 	}
-	mac, err := ComputeMAC(bp, seqN, macK)
+	mac, err := ComputeMAC(bp, seqN, macK, mac_algo)
 	if err != nil {
 		fmt.Println("error computing MAC:", err.Error())
 		return nil, err
 	}
 	ebp := &EncryptedBinaryPacket{
 		Ciphertext: ciphertext,
-		MAC: mac,		
+		MAC:        mac,
 	}
 
 	return ebp, nil
 }
 
-func DecryptAndVerify(ebp *EncryptedBinaryPacket, encK, macK, startIV []byte, seqN uint32) (*BinaryPacket, error) {
+func DecryptAndVerify(ebp *EncryptedBinaryPacket, encK, macK, startIV []byte, seqN uint32, enc_algo, mac_algo string) (*BinaryPacket, error) {
 	ciphertext := ebp.Ciphertext
 	mac := ebp.MAC
 
-	plaintext, err := DecryptPacket(ciphertext, encK, startIV)
+	plaintext, err := DecryptPacket(ciphertext, encK, startIV, enc_algo)
 	if err != nil {
 		fmt.Println("error decrypting packet:", err.Error())
 		return nil, err
@@ -592,7 +617,7 @@ func DecryptAndVerify(ebp *EncryptedBinaryPacket, encK, macK, startIV []byte, se
 
 	bp, _ := UnmarshallBinaryPacket(plaintext)
 
-	if !VerifyMAC(bp, seqN, macK, mac) {
+	if !VerifyMAC(bp, seqN, macK, mac, mac_algo) {
 		return nil, errors.New("error: MAC verification failed")
 	}
 

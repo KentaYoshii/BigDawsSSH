@@ -310,7 +310,7 @@ func DH_KEX_Server(conn *net.TCPConn, group int,
 
 	b := response.Marshall()
 
-	binPacket = CreateBinPacket(b)
+	binPacket = CreateBinPacket(b, 16)
 	b = binPacket.Marshall()
 
 	_, err = conn.Write(b)
@@ -346,7 +346,7 @@ func DH_KEX_Client(conn *net.TCPConn, group int,
 
 	b := initMsg.Marshall()
 
-	binPacket := CreateBinPacket(b)
+	binPacket := CreateBinPacket(b, 16)
 	b = binPacket.Marshall()
 
 	_, err := conn.Write(b)
@@ -499,11 +499,17 @@ func GenerateNewKeys(shared_secret *dh.DHKey, exchange_hash, session_id []byte, 
 	iv_c2s = iv_c2s[:16]
 	iv_s2c = iv_s2c[:16]
 
+	if enc_algo == "3des-cbc" {
+		//default block sz is 8 bytes
+		iv_c2s = iv_c2s[:8]
+		iv_s2c = iv_s2c[:8]
+	}
+
 	// 16 bytes key so we need to truncate
 	if enc_algo == "aes128-cbc" {
 		enc_key_c2s = enc_key_c2s[:16]
 		enc_key_s2c = enc_key_s2c[:16]
-	} else if enc_algo == "aes256-cbc" {
+	} else if enc_algo == "aes256-cbc" || enc_algo == "3des-cbc" {
 		// we need to compute K2
 		// 	K1 = HASH(K || H || X || session_id)   (X is e.g., "A")
 		//  K2 = HASH(K || H || K1)
@@ -515,14 +521,22 @@ func GenerateNewKeys(shared_secret *dh.DHKey, exchange_hash, session_id []byte, 
 		h.Write(exchange_hash)
 		h.Write(enc_key_c2s)
 		k2 := h.Sum(nil)
-		enc_key_c2s = append(enc_key_c2s, k2...)[:32]
+		if enc_algo == "aes256-cbc" {
+			enc_key_c2s = append(enc_key_c2s, k2...)[:32]
+		} else {
+			enc_key_c2s = append(enc_key_c2s, k2...)[:24]
+		}
 
 		h.Reset()
 		h.Write([]byte(shared_secret.String()))
 		h.Write(exchange_hash)
 		h.Write(enc_key_s2c)
 		k2 = h.Sum(nil)
-		enc_key_s2c = append(enc_key_s2c, k2...)[:32]
+		if enc_algo == "aes256-cbc" {
+			enc_key_s2c = append(enc_key_s2c, k2...)[:32]
+		} else {
+			enc_key_s2c = append(enc_key_s2c, k2...)[:24]
+		}
 	}
 
 	return &NewKeys{
@@ -539,7 +553,7 @@ func ServerSendRecvNewKeyMessage(conn *net.TCPConn, priKey *dsa.PrivateKey) bool
 	new_key_msg := CreateNewKeysMessage()
 	msg_b := new_key_msg.Marshall()
 	sig := SignServerDSA(msg_b, priKey)
-	binPacket := CreateBinPacket(sig)
+	binPacket := CreateBinPacket(sig, 16)
 	b := binPacket.Marshall()
 	_, err := conn.Write(b)
 	if err != nil {
@@ -574,7 +588,7 @@ func ServerSendRecvNewKeyMessage(conn *net.TCPConn, priKey *dsa.PrivateKey) bool
 func ClientSendRecvNewKeyMessage(conn *net.TCPConn, pubKey *dsa.PublicKey) bool {
 	new_key_msg := CreateNewKeysMessage()
 	msg_b := new_key_msg.Marshall()
-	binPacket := CreateBinPacket(msg_b)
+	binPacket := CreateBinPacket(msg_b, 16)
 	b := binPacket.Marshall()
 	_, err := conn.Write(b)
 	if err != nil {

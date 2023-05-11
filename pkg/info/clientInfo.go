@@ -30,6 +30,8 @@ type ServerClientInfo struct {
 	// Sequence numbers
 	ServerSeqNum uint32
 	ClientSeqNum uint32
+
+	BLK_SIZE uint8
 }
 
 type ClientClientInfo struct {
