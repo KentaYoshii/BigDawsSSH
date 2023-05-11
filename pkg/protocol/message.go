@@ -8,6 +8,12 @@ import (
 	"strings"
 	"bytes"
 	"ssh/util"
+	"crypto/hmac"
+	"crypto/sha1"
+	// "crypto/aes"
+	// "crypto/cipher"
+	// "crypto/rand"
+	// "encoding/base64"
 )
 
 // Message that gets exchanged between client and server upon connection
@@ -17,6 +23,16 @@ type ProtocolVersionMessage struct {
 	ProtoVersion    string   // 2.0
 	SoftwareVersion string   // Compatability check
 	Comments        []string // Additional info
+}
+
+type ServiceRequestMessage struct {
+	MessageType uint8
+	ServiceName string
+}
+
+type ServiceAcceptMessage struct {
+	MessageType uint8
+	ServiceName string
 }
 
 // For server host authentication via DSA
@@ -71,6 +87,45 @@ func CreateServerAlgorithmNegotiationMessage() *ServerAlgorithmNegotiationMessag
 		First_kex_packet_follows:                false,
 	}
 }
+
+func (sAcc *ServiceAcceptMessage) Marshall() []byte {
+	b := new(bytes.Buffer)
+	binary.Write(b, binary.BigEndian, sAcc.MessageType)
+	binary.Write(b, binary.BigEndian, uint32(len(sAcc.ServiceName)))
+	binary.Write(b, binary.BigEndian, []byte(sAcc.ServiceName))
+	return b.Bytes()
+}
+
+func UnmarshallServiceAccept(buf []byte) *ServiceAcceptMessage {
+	sAcc := new(ServiceAcceptMessage)
+	curr := 0
+	sAcc.MessageType = buf[curr]
+	curr += 1
+	str_len := binary.BigEndian.Uint32(buf[curr:curr+4])
+	curr += 4
+	sAcc.ServiceName = string(buf[curr:curr+int(str_len)])
+	return sAcc
+}
+
+func (sReq *ServiceRequestMessage) Marshall() []byte {
+	b := new(bytes.Buffer)
+	binary.Write(b, binary.BigEndian, sReq.MessageType)
+	binary.Write(b, binary.BigEndian, uint32(len(sReq.ServiceName)))
+	binary.Write(b, binary.BigEndian, []byte(sReq.ServiceName))
+	return b.Bytes()
+}
+
+func UnmarshallServiceRequest(buf []byte) *ServiceRequestMessage {
+	sReq := new(ServiceRequestMessage)
+	curr := 0
+	sReq.MessageType = buf[curr]
+	curr += 1
+	str_len := binary.BigEndian.Uint32(buf[curr:curr+4])
+	curr += 4
+	sReq.ServiceName = string(buf[curr:curr+int(str_len)])
+	return sReq
+}
+
 
 // marshalls the message into a byte array
 // size of each namelist always precedes the namelist
@@ -428,3 +483,78 @@ func (pvm *ProtocolVersionMessage) UnmarshallAndVerify(data []byte) (*ProtocolVe
 
 	return protoVM, comments, nil
 }
+
+// mac = MAC(key, sequence_number || unencrypted_packet)
+func ComputeMAC(bp *BinaryPacket, seqN uint32, macK []byte) ([]byte, error) {
+	b := new(bytes.Buffer)
+	binary.Write(b, binary.BigEndian, seqN)
+	binary.Write(b, binary.BigEndian, bp.Packet_Length)
+	binary.Write(b, binary.BigEndian, bp.Padding_Length)
+	b.Write(bp.Payload)
+	b.Write(bp.Padding)
+
+	to_mac := b.Bytes()
+	mac := hmac.New(sha1.New, macK)
+	_, err := mac.Write(to_mac)
+	if err != nil {
+		return nil, err
+	}
+	msgMac := mac.Sum(nil)
+	return msgMac, nil
+}
+
+// Function that verifies the MAC of a BinaryPacket
+func VerifyMAC(bp *BinaryPacket, seqN uint32, macK []byte) bool {
+	mac, err := ComputeMAC(bp, seqN, macK)
+	if err != nil {
+		fmt.Println("error computing MAC:", err.Error())
+		return false
+	}
+	return hmac.Equal(mac, bp.MAC)
+}
+
+// When encryption is in effect, the packet length, padding
+// length, payload, and padding fields of each packet MUST be encrypted
+// with the given algorithm.
+// func EncryptMessage(key []byte, message string) (string, error) {
+// 	byteMsg := []byte(message)
+// 	block, err := aes.NewCipher(key)
+// 	if err != nil {
+// 		return "", fmt.Errorf("could not create new cipher: %v", err)
+// 	}
+
+// 	cipherText := make([]byte, aes.BlockSize+len(byteMsg))
+// 	iv := cipherText[:aes.BlockSize]
+// 	if _, err = io.ReadFull(rand.Reader, iv); err != nil {
+// 		return "", fmt.Errorf("could not encrypt: %v", err)
+// 	}
+
+// 	stream := cipher.NewCFBEncrypter(block, iv)
+// 	stream.XORKeyStream(cipherText[aes.BlockSize:], byteMsg)
+
+// 	return base64.StdEncoding.EncodeToString(cipherText), nil
+// }
+
+// func DecryptMessage(key []byte, message string) (string, error) {
+// 	cipherText, err := base64.StdEncoding.DecodeString(message)
+// 	if err != nil {
+// 		return "", fmt.Errorf("could not base64 decode: %v", err)
+// 	}
+
+// 	block, err := aes.NewCipher(key)
+// 	if err != nil {
+// 		return "", fmt.Errorf("could not create new cipher: %v", err)
+// 	}
+
+// 	if len(cipherText) < aes.BlockSize {
+// 		return "", fmt.Errorf("invalid ciphertext block size")
+// 	}
+
+// 	iv := cipherText[:aes.BlockSize]
+// 	cipherText = cipherText[aes.BlockSize:]
+
+// 	stream := cipher.NewCFBDecrypter(block, iv)
+// 	stream.XORKeyStream(cipherText, cipherText)
+
+// 	return string(cipherText), nil
+// }

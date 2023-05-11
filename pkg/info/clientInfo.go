@@ -26,6 +26,10 @@ type ServerClientInfo struct {
 
 	// Keys
 	Keys *proto.NewKeys
+
+	// Sequence numbers
+	ServerSeqNum uint32
+	ClientSeqNum uint32
 }
 
 type ClientClientInfo struct {

@@ -137,3 +137,55 @@ func DoAlgorithmNegotiation(csi *info.ClientServerInfo, cci *info.ClientClientIn
 	csi.AgreedAlgorithm = agreed
 	return true
 }
+
+func DoServiceRequest(cci *info.ClientClientInfo, csi *info.ClientServerInfo, service string) bool {
+	serviceReq := &proto.ServiceRequestMessage{
+		MessageType: util.SSH_MSG_SERVICE_REQUEST,
+	}
+	if (service != "ssh-userauth") && (service != "ssh-connection") {
+		fmt.Println("Invalid service")
+		return false
+	}
+	serviceReq.ServiceName = service
+	msg_b := serviceReq.Marshall()
+	binPacket := proto.CreateBinPacket(msg_b, nil)
+	mac, err := proto.ComputeMAC(binPacket, csi.ClientSeqNum, csi.Keys.IntKey_C2S)
+	if err != nil {
+		fmt.Println("Compute MAC failed")
+		return false
+	}
+	binPacket.MAC = mac
+	b := binPacket.Marshall()
+	_, err = csi.ServerConn.Write(b)
+	if err != nil {
+		fmt.Println("Write to server failed:", err.Error())
+		return false
+	}
+
+	csi.ClientSeqNum++
+
+	buf := make([]byte, util.MAX_PACKET_SIZE)
+	_, err = csi.ServerConn.Read(buf)
+	if err != nil {
+		fmt.Println("Read from server failed:", err.Error())
+		return false
+	}
+
+	binPacket, _ = proto.UnmarshallBinaryPacket(buf)
+	suc := proto.VerifyMAC(binPacket, csi.ServerSeqNum, csi.Keys.IntKey_S2C)
+	if !suc {
+		fmt.Println("MAC verification failed")
+		return false
+	}
+
+	csi.ServerSeqNum++
+
+	payload := binPacket.Payload
+	msg := proto.UnmarshallServiceAccept(payload)
+	if msg.MessageType != util.SSH_MSG_SERVICE_ACCEPT {
+		fmt.Println("Invalid message type")
+		return false
+	}
+
+	return msg.ServiceName == service
+}

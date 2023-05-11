@@ -36,8 +36,8 @@ import (
 // --------------------------------------------------------------------------
 
 type NewKeys struct {
-	IV_C2S []byte
-	IV_S2C []byte
+	IV_C2S     []byte
+	IV_S2C     []byte
 	EncKey_C2S []byte
 	EncKey_S2C []byte
 	IntKey_C2S []byte
@@ -345,7 +345,7 @@ func DH_KEX_Client(conn *net.TCPConn, group int,
 	}
 
 	b := initMsg.Marshall()
-	
+
 	binPacket := CreateBinPacket(b, nil)
 	b = binPacket.Marshall()
 
@@ -428,17 +428,17 @@ func DH_KEX_Client(conn *net.TCPConn, group int,
 		fmt.Println("Server's signature verification failed")
 		return nil, nil, false
 	}
-	
+
 	return k, exchange_hash, true
 }
 
-func GenerateNewKeys(shared_secret *dh.DHKey, exchange_hash, session_id []byte) *NewKeys {
+func GenerateNewKeys(shared_secret *dh.DHKey, exchange_hash, session_id []byte, enc_algo string) *NewKeys {
+	// sha1 output size is 20 bytes
 	h := sha1.New()
-	// IV
 
 	// Initial IV client to server: HASH(K || H || "A" || session_id)
-    // (Here K is encoded as mpint and "A" as byte and session_id as raw
-    // data).
+	// (Here K is encoded as mpint and "A" as byte and session_id as raw
+	// data).
 
 	h.Write([]byte(shared_secret.String()))
 	h.Write(exchange_hash)
@@ -494,6 +494,39 @@ func GenerateNewKeys(shared_secret *dh.DHKey, exchange_hash, session_id []byte) 
 	h.Write(session_id)
 
 	int_key_s2c := h.Sum(nil)
+
+	// aes blcok size is 16 bytes so we need to truncate iv
+	iv_c2s = iv_c2s[:16]
+	iv_s2c = iv_s2c[:16]
+
+	// 16 bytes key so we need to truncate
+	if enc_algo == "aes128-cbc" {
+		enc_key_c2s = enc_key_c2s[:16]
+		enc_key_s2c = enc_key_s2c[:16]
+	} else if enc_algo == "aes256-cbc" {
+		// we need to compute K2
+		// 	K1 = HASH(K || H || X || session_id)   (X is e.g., "A")
+		//  K2 = HASH(K || H || K1)
+		//  K3 = HASH(K || H || K1 || K2)
+		//  ...
+		//  key = K1 || K2 || K3 || ...
+		h.Reset()
+		h.Write([]byte(shared_secret.String()))
+		h.Write(exchange_hash)
+		h.Write(enc_key_c2s)
+		k2 := h.Sum(nil)
+		enc_key_c2s = append(enc_key_c2s, k2...)[:32]
+
+		h.Reset()
+		h.Write([]byte(shared_secret.String()))
+		h.Write(exchange_hash)
+		h.Write(enc_key_s2c)
+		k2 = h.Sum(nil)
+		enc_key_s2c = append(enc_key_s2c, k2...)[:32]
+	}
+
+	fmt.Println(iv_c2s)
+	fmt.Println(enc_key_c2s)
 
 	return &NewKeys{
 		IV_C2S:     iv_c2s,
@@ -581,7 +614,7 @@ func ClientSendRecvNewKeyMessage(conn *net.TCPConn, pubKey *dsa.PublicKey) bool 
 	return nkm.MessageType == util.SSH_MSG_NEWKEYS
 }
 
-func CreateNewKeysMessage()*NewKeysMessage{
+func CreateNewKeysMessage() *NewKeysMessage {
 	return &NewKeysMessage{
 		MessageType: util.SSH_MSG_NEWKEYS,
 	}
@@ -606,5 +639,3 @@ func UnmarshallNewKeysMessage(b []byte) (*NewKeysMessage, error) {
 		MessageType: b[0],
 	}, nil
 }
-
-

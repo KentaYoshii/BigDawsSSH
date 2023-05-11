@@ -22,6 +22,9 @@ type ClientServerInfo struct {
 	ExchangeHash  	[]byte
 	SessionIdentifier []byte // Identifier for this session set to the first hash output of the KEX. IMMUTABLE
 	Keys 			*protocol.NewKeys
+
+	ServerSeqNum 	uint32
+	ClientSeqNum 	uint32
 }
 
 type ServerInfo struct {

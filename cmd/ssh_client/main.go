@@ -75,7 +75,7 @@ func main() {
 
 	fmt.Printf("Key exchange successful\n")
 
-	newKs := proto.GenerateNewKeys(k, exh, csi.SessionIdentifier)
+	newKs := proto.GenerateNewKeys(k, exh, csi.SessionIdentifier, csi.AgreedAlgorithm.Encryption_algorithm)
 	csi.Keys = newKs
 
 	fmt.Println("New keys generated")
@@ -87,6 +87,18 @@ func main() {
 	}
 
 	fmt.Println("New Key Message exchange successful")
+
+	csi.ClientSeqNum = 0
+	csi.ServerSeqNum = 0
+
+	// Send Service Request
+	if !core.DoServiceRequest(cci, csi, "ssh-userauth") {
+		fmt.Println("Service request failed")
+		os.Exit(1)
+	}
+
+	fmt.Println("Service request successful")
+
 	for {
 
 	}

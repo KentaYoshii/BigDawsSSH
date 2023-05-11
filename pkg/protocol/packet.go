@@ -57,8 +57,6 @@ func CreateBinPacket(payload []byte, mac []byte) *BinaryPacket {
 		}
 	}
 	bp.Padding = GenerateRandomPadding(bp.Padding_Length)
-	// Generate random padding
-	bp.Padding = make([]byte, 0)
 	bp.Packet_Length = uint32(bp.Padding_Length) + pay_len + 1
 	bp.MAC = mac
 	return bp

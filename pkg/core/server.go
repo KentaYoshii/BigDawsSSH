@@ -161,6 +161,61 @@ func ExchangeNegotiationMessage(si *info.ServerInfo, ci *info.ServerClientInfo) 
 	return true
 }
 
+func ExchangeServiceMessage(si *info.ServerInfo, ci *info.ServerClientInfo) bool {
+	// read service request message
+	b := make([]byte, util.MAX_PACKET_SIZE)
+	_, err := ci.Conn.Read(b)
+	if err != nil {
+		fmt.Println("Error receiving service request message:", err.Error())
+		return false
+	}
+
+	binPacket, _ := proto.UnmarshallBinaryPacket(b)
+	suc := proto.VerifyMAC(binPacket, ci.ClientSeqNum, ci.Keys.IntKey_C2S)
+	if !suc {
+		fmt.Println("MAC verification failed")
+		return false
+	}
+
+	ci.ClientSeqNum++
+
+	b = binPacket.Payload
+	reqMsg := proto.UnmarshallServiceRequest(b)
+	if reqMsg.MessageType != util.SSH_MSG_SERVICE_REQUEST {
+		fmt.Println("Message type not SSH_MSG_SERVICE_REQUEST")
+		return false
+	}
+	if reqMsg.ServiceName != "ssh-userauth" {
+		fmt.Println("Service request message not for ssh-userauth")
+		return false
+	}
+
+	// send service accept message
+	sam := &proto.ServiceAcceptMessage{
+		MessageType: util.SSH_MSG_SERVICE_ACCEPT,
+		ServiceName: "ssh-userauth",
+	}
+
+	b = sam.Marshall()
+	binPacket = proto.CreateBinPacket(b, nil)
+	mac, err := proto.ComputeMAC(binPacket, ci.ServerSeqNum, ci.Keys.IntKey_S2C)
+	if err != nil {
+		fmt.Println("Error computing MAC:", err.Error())
+		return false
+	}
+	binPacket.MAC = mac
+	b = binPacket.Marshall()
+	_, err = ci.Conn.Write(b)
+	if err != nil {
+		fmt.Println("Error sending service accept message:", err.Error())
+		return false
+	}
+
+	ci.ServerSeqNum++
+
+	return true
+}
+
 func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {
 
 	// exchange protocol version
@@ -209,7 +264,7 @@ func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {
 	fmt.Println("Key exchange successful with client", ci.ID)
 
 
-	newKs := proto.GenerateNewKeys(k, exh, ci.SessionIdentifier)
+	newKs := proto.GenerateNewKeys(k, exh, ci.SessionIdentifier, si.ClientsAlgorithms[ci.ID].Encryption_algorithm)
 	ci.Keys = newKs
 
 	fmt.Println("New keys generated for client", ci.ID)
@@ -223,4 +278,18 @@ func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {
 	}
 
 	fmt.Println("New Key Message exchanged with client", ci.ID)
+
+	ci.ServerSeqNum = 0
+	ci.ClientSeqNum = 0
+
+	// exchange service request message
+	if !ExchangeServiceMessage(si, ci) {
+		fmt.Println("Service request exchange failed")
+		// close connection
+		ci.Conn.Close()
+		return
+	}
+
+	fmt.Println("Service request exchange successful with client", ci.ID)
+
 }
