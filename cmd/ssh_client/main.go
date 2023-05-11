@@ -100,8 +100,5 @@ func main() {
 	}
 
 	fmt.Println("Service request successful")
-
-	for {
-
-	}
+	
 }

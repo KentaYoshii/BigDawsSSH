@@ -102,6 +102,7 @@ func DoAlgorithmNegotiation(csi *info.ClientServerInfo, cci *info.ClientClientIn
 		return false
 	}
 
+	retry:
 	// Read server's algorithm negotiation message
 	buf := make([]byte, util.MAX_PACKET_SIZE)
 	_, err = conn.Read(buf)
@@ -117,6 +118,14 @@ func DoAlgorithmNegotiation(csi *info.ClientServerInfo, cci *info.ClientClientIn
 	msg, suc := proto.VerifyServerDSASignature(payload, dsaPubKey)
 	if !suc {
 		fmt.Println("DSA Verify failed")
+		return false
+	}
+
+	m_type := msg[0]
+	if m_type == util.SSH_MSG_IGNORE || m_type == util.SSH_MSG_DEBUG {
+		goto retry
+	} else if m_type == util.SSH_MSG_DISCONNECT {
+		fmt.Println("Received disconnec message")
 		return false
 	}
 	csi.KInitMSG = msg
@@ -168,6 +177,7 @@ func DoServiceRequest(cci *info.ClientClientInfo, csi *info.ClientServerInfo, se
 
 	csi.ClientSeqNum++
 
+	retry:
 	buf := make([]byte, util.MAX_PACKET_SIZE)
 	_, err = csi.ServerConn.Read(buf)
 	if err != nil {
@@ -182,9 +192,18 @@ func DoServiceRequest(cci *info.ClientClientInfo, csi *info.ClientServerInfo, se
 		return false
 	}
 
+	payload := binPacket.Payload
+	m_type := payload[0]
+	if m_type == util.SSH_MSG_IGNORE || m_type == util.SSH_MSG_DEBUG {
+		goto retry
+	} else if m_type == util.SSH_MSG_DISCONNECT {
+		fmt.Println("Received disconnec message")
+		return false
+	}
+	
+
 	csi.ServerSeqNum++
 
-	payload := binPacket.Payload
 	msg := proto.UnmarshallServiceAccept(payload)
 	if msg.MessageType != util.SSH_MSG_SERVICE_ACCEPT {
 		fmt.Println("Invalid message type")

@@ -127,7 +127,7 @@ func ExchangeNegotiationMessage(si *info.ServerInfo, ci *info.ServerClientInfo) 
 		fmt.Println("Error sending algorithm negotiation message:", err.Error())
 		return false
 	}
-
+	retry:
 	// receive client's algorithm negotiation message
 	b = make([]byte, util.MAX_PACKET_SIZE)
 	_, err = ci.Conn.Read(b)
@@ -138,6 +138,16 @@ func ExchangeNegotiationMessage(si *info.ServerInfo, ci *info.ServerClientInfo) 
 
 	binPacket, _ = proto.UnmarshallBinaryPacket(b)
 	b = binPacket.Payload
+	// check msg type
+	m_type := b[0]
+	// ignore message
+	if m_type == util.SSH_MSG_IGNORE || m_type == util.SSH_MSG_DEBUG {
+		goto retry
+	} else if m_type == util.SSH_MSG_DISCONNECT {
+		fmt.Println("Received disconnec message")
+		return false
+	} 
+
 	// unmarshall client's negotiation message
 	canm, len, err := proto.UnmarshallClientNegotiation(b)
 	if err != nil {
@@ -167,6 +177,7 @@ func ExchangeServiceMessage(si *info.ServerInfo, ci *info.ServerClientInfo) bool
 	mac_algo := si.ClientsAlgorithms[ci.ID].Mac_algorithm
 
 	// read service request message
+	retry:
 	b := make([]byte, util.MAX_PACKET_SIZE)
 	_, err := ci.Conn.Read(b)
 	if err != nil {
@@ -181,9 +192,16 @@ func ExchangeServiceMessage(si *info.ServerInfo, ci *info.ServerClientInfo) bool
 		return false
 	}
 
-	ci.ClientSeqNum++
-
 	b = binPacket.Payload
+	m_type := b[0]
+	if m_type == util.SSH_MSG_IGNORE || m_type == util.SSH_MSG_DEBUG {
+		goto retry
+	} else if m_type == util.SSH_MSG_DISCONNECT {
+		fmt.Println("Received disconnec message")
+		return false
+	} 
+	
+	ci.ClientSeqNum++
 	reqMsg := proto.UnmarshallServiceRequest(b)
 
 	if reqMsg.MessageType != util.SSH_MSG_SERVICE_REQUEST {
