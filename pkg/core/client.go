@@ -149,19 +149,10 @@ func DoServiceRequest(cci *info.ClientClientInfo, csi *info.ClientServerInfo, se
 	serviceReq.ServiceName = service
 	msg_b := serviceReq.Marshall()
 	binPacket := proto.CreateBinPacket(msg_b)
-	mac, err := proto.ComputeMAC(binPacket, csi.ClientSeqNum, csi.Keys.IntKey_C2S)
+	encryptedBinaryPacket, err := proto.EncryptAndMac(binPacket, csi.Keys.EncKey_C2S, csi.Keys.IntKey_C2S, csi.Keys.IV_C2S, csi.ClientSeqNum)
 	if err != nil {
-		fmt.Println("Compute MAC failed")
+		fmt.Println("Encrypt and mac failed")
 		return false
-	}
-	ciphertext, err := proto.EncryptPacket(binPacket, csi.Keys.EncKey_C2S, csi.Keys.IV_C2S)
-	if err != nil {
-		fmt.Println("Encrypt packet failed")
-		return false
-	}
-	encryptedBinaryPacket := &proto.EncryptedBinaryPacket{
-		Ciphertext: ciphertext,
-		MAC: mac,
 	}
 	b := encryptedBinaryPacket.Marshall()
 	_, err = csi.ServerConn.Write(b)
@@ -179,18 +170,12 @@ func DoServiceRequest(cci *info.ClientClientInfo, csi *info.ClientServerInfo, se
 		return false
 	}
 	encryptedPacket, _ := proto.UnmarshallEncryptedBinaryPacket(buf)
-	plaintext, err := proto.DecryptPacket(encryptedPacket.Ciphertext, csi.Keys.EncKey_S2C, csi.Keys.IV_S2C)
+	binPacket, err = proto.DecryptAndVerify(encryptedPacket, csi.Keys.EncKey_S2C, csi.Keys.IntKey_S2C, csi.Keys.IV_S2C, csi.ServerSeqNum)
 	if err != nil {
-		fmt.Println("Decrypt packet failed")
+		fmt.Println("Decrypt and verify failed")
 		return false
 	}
-	binPacket, _ = proto.UnmarshallBinaryPacket(plaintext)
-	suc := proto.VerifyMAC(binPacket, csi.ServerSeqNum, csi.Keys.IntKey_S2C, encryptedPacket.MAC)
-	if !suc {
-		fmt.Println("MAC verification failed")
-		return false
-	}
-
+	
 	csi.ServerSeqNum++
 
 	payload := binPacket.Payload

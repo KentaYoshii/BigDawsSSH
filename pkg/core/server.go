@@ -169,16 +169,11 @@ func ExchangeServiceMessage(si *info.ServerInfo, ci *info.ServerClientInfo) bool
 		fmt.Println("Error receiving service request message:", err.Error())
 		return false
 	}
-	recvEncryptedPacket, _ := proto.UnmarshallEncryptedBinaryPacket(b) 
-	plaintext, err := proto.DecryptPacket(recvEncryptedPacket.Ciphertext, ci.Keys.EncKey_C2S, ci.Keys.IV_C2S)
+	recvEncryptedPacket, _ := proto.UnmarshallEncryptedBinaryPacket(b)
+	binPacket, err := proto.DecryptAndVerify(recvEncryptedPacket, ci.Keys.EncKey_C2S,
+		ci.Keys.IntKey_C2S, ci.Keys.IV_C2S, ci.ClientSeqNum)
 	if err != nil {
-		fmt.Println("Error decrypting packet:", err.Error())
-		return false
-	}
-	binPacket, _ := proto.UnmarshallBinaryPacket(plaintext)
-	suc := proto.VerifyMAC(binPacket, ci.ClientSeqNum, ci.Keys.IntKey_C2S, recvEncryptedPacket.MAC)
-	if !suc {
-		fmt.Println("MAC verification failed")
+		fmt.Println("Error decrypting and verifying service request message:", err.Error())
 		return false
 	}
 
@@ -186,6 +181,7 @@ func ExchangeServiceMessage(si *info.ServerInfo, ci *info.ServerClientInfo) bool
 
 	b = binPacket.Payload
 	reqMsg := proto.UnmarshallServiceRequest(b)
+
 	if reqMsg.MessageType != util.SSH_MSG_SERVICE_REQUEST {
 		fmt.Println("Message type not SSH_MSG_SERVICE_REQUEST")
 		return false
@@ -203,20 +199,12 @@ func ExchangeServiceMessage(si *info.ServerInfo, ci *info.ServerClientInfo) bool
 
 	b = sam.Marshall()
 	binPacket = proto.CreateBinPacket(b)
-	mac, err := proto.ComputeMAC(binPacket, ci.ServerSeqNum, ci.Keys.IntKey_S2C)
+	encryptedPacket, err := proto.EncryptAndMac(binPacket, ci.Keys.EncKey_S2C, ci.Keys.IntKey_S2C, ci.Keys.IV_S2C, ci.ServerSeqNum)
 	if err != nil {
-		fmt.Println("Error computing MAC:", err.Error())
+		fmt.Println("Error encrypting and macing service accept message:", err.Error())
 		return false
 	}
-	ciphertext, err := proto.EncryptPacket(binPacket, ci.Keys.EncKey_S2C, ci.Keys.IV_S2C)
-	if err != nil {
-		fmt.Println("Error encrypting packet:", err.Error())
-		return false
-	}
-	encryptedPacket := &proto.EncryptedBinaryPacket{
-		Ciphertext: ciphertext,
-		MAC:        mac,
-	}
+	
 	b = encryptedPacket.Marshall()
 	_, err = ci.Conn.Write(b)
 	if err != nil {

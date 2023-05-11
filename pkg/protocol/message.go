@@ -560,3 +560,41 @@ func DecryptPacket(ciphertext, encK, startIV []byte) (plaintext []byte, err erro
 
 	return plaintext, nil
 }	
+
+func EncryptAndMac(bp *BinaryPacket, encK, macK, startIV []byte, seqN uint32) (*EncryptedBinaryPacket, error) {
+	ciphertext, err := EncryptPacket(bp, encK, startIV)
+	if err != nil {
+		fmt.Println("error encrypting packet:", err.Error())
+		return nil, err
+	}
+	mac, err := ComputeMAC(bp, seqN, macK)
+	if err != nil {
+		fmt.Println("error computing MAC:", err.Error())
+		return nil, err
+	}
+	ebp := &EncryptedBinaryPacket{
+		Ciphertext: ciphertext,
+		MAC: mac,		
+	}
+
+	return ebp, nil
+}
+
+func DecryptAndVerify(ebp *EncryptedBinaryPacket, encK, macK, startIV []byte, seqN uint32) (*BinaryPacket, error) {
+	ciphertext := ebp.Ciphertext
+	mac := ebp.MAC
+
+	plaintext, err := DecryptPacket(ciphertext, encK, startIV)
+	if err != nil {
+		fmt.Println("error decrypting packet:", err.Error())
+		return nil, err
+	}
+
+	bp, _ := UnmarshallBinaryPacket(plaintext)
+
+	if !VerifyMAC(bp, seqN, macK, mac) {
+		return nil, errors.New("error: MAC verification failed")
+	}
+
+	return bp, nil
+}
