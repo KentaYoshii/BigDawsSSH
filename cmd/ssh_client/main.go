@@ -80,6 +80,13 @@ func main() {
 
 	fmt.Println("New keys generated")
 
+	// Send New Key Message
+	if !proto.ClientSendRecvNewKeyMessage(csi.ServerConn, csi.ServerDSAPubKey) {
+		fmt.Println("New Key Message exchange failed")
+		os.Exit(1)
+	}
+
+	fmt.Println("New Key Message exchange successful")
 	for {
 
 	}

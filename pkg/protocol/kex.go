@@ -68,6 +68,10 @@ type ServerClientKEXReply struct {
 	Signature       []byte
 }
 
+type NewKeysMessage struct {
+	MessageType byte
+}
+
 // Function that marshalls the reply struct into a byte array
 func (c *ServerClientKEXReply) Marshall() []byte {
 	buf := new(bytes.Buffer)
@@ -500,3 +504,107 @@ func GenerateNewKeys(shared_secret *dh.DHKey, exchange_hash, session_id []byte) 
 		IntKey_S2C: int_key_s2c,
 	}
 }
+
+func ServerSendRecvNewKeyMessage(conn *net.TCPConn, priKey *dsa.PrivateKey) bool {
+	new_key_msg := CreateNewKeysMessage()
+	msg_b := new_key_msg.Marshall()
+	sig := SignServerDSA(msg_b, priKey)
+	binPacket := CreateBinPacket(sig, nil)
+	b := binPacket.Marshall()
+	_, err := conn.Write(b)
+	if err != nil {
+		fmt.Println("SendNewKeyMessage: Write failed:", err.Error())
+		return false
+	}
+
+	// Read the other's new key message
+	b = make([]byte, util.MAX_PACKET_SIZE)
+	_, err = conn.Read(b)
+	if err != nil {
+		fmt.Println("SendNewKeyMessage: Read failed:", err.Error())
+		return false
+	}
+
+	binPacket, err = UnmarshallBinaryPacket(b)
+	if err != nil {
+		fmt.Println("SendNewKeyMessage: UnmarshallBinaryPacket failed:", err.Error())
+		return false
+	}
+
+	msg_b = binPacket.Payload
+	nkm, err := UnmarshallNewKeysMessage(msg_b)
+	if err != nil {
+		fmt.Println("SendNewKeyMessage: UnmarshallNewKeysMessage failed:", err.Error())
+		return false
+	}
+
+	return nkm.MessageType == util.SSH_MSG_NEWKEYS
+}
+
+func ClientSendRecvNewKeyMessage(conn *net.TCPConn, pubKey *dsa.PublicKey) bool {
+	new_key_msg := CreateNewKeysMessage()
+	msg_b := new_key_msg.Marshall()
+	binPacket := CreateBinPacket(msg_b, nil)
+	b := binPacket.Marshall()
+	_, err := conn.Write(b)
+	if err != nil {
+		fmt.Println("SendNewKeyMessage: Write failed:", err.Error())
+		return false
+	}
+
+	// Read the other's new key message
+	b = make([]byte, util.MAX_PACKET_SIZE)
+	_, err = conn.Read(b)
+	if err != nil {
+		fmt.Println("SendNewKeyMessage: Read failed:", err.Error())
+		return false
+	}
+
+	binPacket, err = UnmarshallBinaryPacket(b)
+	if err != nil {
+		fmt.Println("SendNewKeyMessage: UnmarshallBinaryPacket failed:", err.Error())
+		return false
+	}
+
+	recv_msg_b, suc := VerifyServerDSASignature(binPacket.Payload, pubKey)
+	if !suc {
+		fmt.Println("SendNewKeyMessage: VerifyServerDSASignature failed")
+		return false
+	}
+
+	nkm, err := UnmarshallNewKeysMessage(recv_msg_b)
+	if err != nil {
+		fmt.Println("SendNewKeyMessage: UnmarshallNewKeysMessage failed:", err.Error())
+		return false
+	}
+
+	return nkm.MessageType == util.SSH_MSG_NEWKEYS
+}
+
+func CreateNewKeysMessage()*NewKeysMessage{
+	return &NewKeysMessage{
+		MessageType: util.SSH_MSG_NEWKEYS,
+	}
+}
+
+func (nkm *NewKeysMessage) Marshall() []byte {
+	b := make([]byte, 0)
+	b = append(b, nkm.MessageType)
+	return b
+}
+
+func UnmarshallNewKeysMessage(b []byte) (*NewKeysMessage, error) {
+	if len(b) != 1 {
+		return nil, errors.New("UnmarshallNewKeysMessage: Invalid length")
+	}
+
+	if b[0] != util.SSH_MSG_NEWKEYS {
+		return nil, errors.New("UnmarshallNewKeysMessage: Invalid message type")
+	}
+
+	return &NewKeysMessage{
+		MessageType: b[0],
+	}, nil
+}
+
+

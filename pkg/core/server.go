@@ -214,4 +214,13 @@ func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {
 
 	fmt.Println("New keys generated for client", ci.ID)
 	
+	// send New Key Message to client
+	if !proto.ServerSendRecvNewKeyMessage(ci.Conn, si.DSAPrivKey) {
+		fmt.Println("Error sending New Key Message to client", ci.ID)
+		// close connection
+		ci.Conn.Close()
+		return
+	}
+
+	fmt.Println("New Key Message exchanged with client", ci.ID)
 }
