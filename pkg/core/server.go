@@ -207,4 +207,11 @@ func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {
 	ci.Status = "KEXed"
 
 	fmt.Println("Key exchange successful with client", ci.ID)
+
+
+	newKs := proto.GenerateNewKeys(k, exh, ci.SessionIdentifier)
+	ci.Keys = newKs
+
+	fmt.Println("New keys generated for client", ci.ID)
+	
 }

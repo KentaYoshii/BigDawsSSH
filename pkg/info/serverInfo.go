@@ -20,6 +20,8 @@ type ClientServerInfo struct {
 	KInitMSG		[]byte
 	SharedSecret  	*dh.DHKey
 	ExchangeHash  	[]byte
+	SessionIdentifier []byte // Identifier for this session set to the first hash output of the KEX. IMMUTABLE
+	Keys 			*protocol.NewKeys
 }
 
 type ServerInfo struct {

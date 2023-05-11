@@ -71,8 +71,14 @@ func main() {
 
 	csi.SharedSecret = k
 	csi.ExchangeHash = exh
+	csi.SessionIdentifier = exh
 
 	fmt.Printf("Key exchange successful\n")
+
+	newKs := proto.GenerateNewKeys(k, exh, csi.SessionIdentifier)
+	csi.Keys = newKs
+
+	fmt.Println("New keys generated")
 
 	for {
 

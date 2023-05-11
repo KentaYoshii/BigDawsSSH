@@ -23,6 +23,9 @@ type ServerClientInfo struct {
 	SharedSecret      *dh.DHKey
 	ExchangeHash      []byte
 	SessionIdentifier []byte // Identifier for this session set to the first hash output of the KEX. IMMUTABLE
+
+	// Keys
+	Keys *proto.NewKeys
 }
 
 type ClientClientInfo struct {

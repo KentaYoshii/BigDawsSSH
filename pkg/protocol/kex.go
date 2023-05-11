@@ -35,6 +35,15 @@ import (
 
 // --------------------------------------------------------------------------
 
+type NewKeys struct {
+	IV_C2S []byte
+	IV_S2C []byte
+	EncKey_C2S []byte
+	EncKey_S2C []byte
+	IntKey_C2S []byte
+	IntKey_S2C []byte
+}
+
 // Generic Hanlder function for Server DH KEX
 type KeyExchangeServer func(
 	*net.TCPConn, int, *ProtocolVersionMessage, *ProtocolVersionMessage,
@@ -417,4 +426,77 @@ func DH_KEX_Client(conn *net.TCPConn, group int,
 	}
 	
 	return k, exchange_hash, true
+}
+
+func GenerateNewKeys(shared_secret *dh.DHKey, exchange_hash, session_id []byte) *NewKeys {
+	h := sha1.New()
+	// IV
+
+	// Initial IV client to server: HASH(K || H || "A" || session_id)
+    // (Here K is encoded as mpint and "A" as byte and session_id as raw
+    // data).
+
+	h.Write([]byte(shared_secret.String()))
+	h.Write(exchange_hash)
+	h.Write([]byte("A"))
+	h.Write(session_id)
+
+	iv_c2s := h.Sum(nil)
+
+	// Initial IV server to client: HASH(K || H || "B" || session_id)
+	h.Reset()
+	h.Write([]byte(shared_secret.String()))
+	h.Write(exchange_hash)
+	h.Write([]byte("B"))
+	h.Write(session_id)
+
+	iv_s2c := h.Sum(nil)
+
+	// Encryption key client to server: HASH(K || H || "C" || session_id)
+	h.Reset()
+	h.Write([]byte(shared_secret.String()))
+	h.Write(exchange_hash)
+	h.Write([]byte("C"))
+	h.Write(session_id)
+
+	enc_key_c2s := h.Sum(nil)
+
+	// Encryption key server to client: HASH(K || H || "D" || session_id)
+	h.Reset()
+
+	h.Write([]byte(shared_secret.String()))
+	h.Write(exchange_hash)
+	h.Write([]byte("D"))
+	h.Write(session_id)
+
+	enc_key_s2c := h.Sum(nil)
+
+	// Integrity key client to server: HASH(K || H || "E" || session_id)
+	h.Reset()
+
+	h.Write([]byte(shared_secret.String()))
+	h.Write(exchange_hash)
+	h.Write([]byte("E"))
+	h.Write(session_id)
+
+	int_key_c2s := h.Sum(nil)
+
+	// Integrity key server to client: HASH(K || H || "F" || session_id)
+	h.Reset()
+
+	h.Write([]byte(shared_secret.String()))
+	h.Write(exchange_hash)
+	h.Write([]byte("F"))
+	h.Write(session_id)
+
+	int_key_s2c := h.Sum(nil)
+
+	return &NewKeys{
+		IV_C2S:     iv_c2s,
+		IV_S2C:     iv_s2c,
+		EncKey_C2S: enc_key_c2s,
+		EncKey_S2C: enc_key_s2c,
+		IntKey_C2S: int_key_c2s,
+		IntKey_S2C: int_key_s2c,
+	}
 }
