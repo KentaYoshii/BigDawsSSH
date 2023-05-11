@@ -93,7 +93,7 @@ func DoAlgorithmNegotiation(csi *info.ClientServerInfo, cci *info.ClientClientIn
 	cci.ClientKInitMSG = b
 
 	// Binary Packet Protocol
-	binPacket := proto.CreateBinPacket(b, nil)
+	binPacket := proto.CreateBinPacket(b)
 	b = binPacket.Marshall()
 
 	_, err := conn.Write(b)
@@ -148,14 +148,22 @@ func DoServiceRequest(cci *info.ClientClientInfo, csi *info.ClientServerInfo, se
 	}
 	serviceReq.ServiceName = service
 	msg_b := serviceReq.Marshall()
-	binPacket := proto.CreateBinPacket(msg_b, nil)
+	binPacket := proto.CreateBinPacket(msg_b)
 	mac, err := proto.ComputeMAC(binPacket, csi.ClientSeqNum, csi.Keys.IntKey_C2S)
 	if err != nil {
 		fmt.Println("Compute MAC failed")
 		return false
 	}
-	binPacket.MAC = mac
-	b := binPacket.Marshall()
+	ciphertext, err := proto.EncryptPacket(binPacket, csi.Keys.EncKey_C2S, csi.Keys.IV_C2S)
+	if err != nil {
+		fmt.Println("Encrypt packet failed")
+		return false
+	}
+	encryptedBinaryPacket := &proto.EncryptedBinaryPacket{
+		Ciphertext: ciphertext,
+		MAC: mac,
+	}
+	b := encryptedBinaryPacket.Marshall()
 	_, err = csi.ServerConn.Write(b)
 	if err != nil {
 		fmt.Println("Write to server failed:", err.Error())
@@ -170,9 +178,14 @@ func DoServiceRequest(cci *info.ClientClientInfo, csi *info.ClientServerInfo, se
 		fmt.Println("Read from server failed:", err.Error())
 		return false
 	}
-
-	binPacket, _ = proto.UnmarshallBinaryPacket(buf)
-	suc := proto.VerifyMAC(binPacket, csi.ServerSeqNum, csi.Keys.IntKey_S2C)
+	encryptedPacket, _ := proto.UnmarshallEncryptedBinaryPacket(buf)
+	plaintext, err := proto.DecryptPacket(encryptedPacket.Ciphertext, csi.Keys.EncKey_S2C, csi.Keys.IV_S2C)
+	if err != nil {
+		fmt.Println("Decrypt packet failed")
+		return false
+	}
+	binPacket, _ = proto.UnmarshallBinaryPacket(plaintext)
+	suc := proto.VerifyMAC(binPacket, csi.ServerSeqNum, csi.Keys.IntKey_S2C, encryptedPacket.MAC)
 	if !suc {
 		fmt.Println("MAC verification failed")
 		return false

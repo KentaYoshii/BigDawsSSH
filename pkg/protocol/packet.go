@@ -1,12 +1,17 @@
 package protocol
 
 import (
-	util "ssh/util"
-	mrand "math/rand"
-    "time"
 	"bytes"
 	"encoding/binary"
+	mrand "math/rand"
+	util "ssh/util"
+	"time"
 )
+
+type EncryptedBinaryPacket struct {
+	Ciphertext []byte
+	MAC        []byte
+}
 
 type BinaryPacket struct {
 	// The length of the packet in bytes, not including 'mac' or the 'packet_length' field itself.
@@ -17,11 +22,9 @@ type BinaryPacket struct {
 	// ! if compression is enabled, this is compressed
 	Payload []byte
 	// Arbitrary-length padding, such that the total length of (packet_length || padding_length || payload || random padding)
-    // is a multiple of the cipher block size or 8, whichever is larger.  
+	// is a multiple of the cipher block size or 8, whichever is larger.
 	// 4 <= padding_length <= 255
 	Padding []byte
-	// Message Authentication Code
-	MAC []byte
 }
 
 // Function that generates a random cookie of length 16
@@ -40,16 +43,15 @@ func GenerateRandomPadding(sz uint8) []byte {
 	return padding
 }
 
-func CreateBinPacket(payload []byte, mac []byte) *BinaryPacket {
+func CreateBinPacket(payload []byte) *BinaryPacket {
 	bp := &BinaryPacket{}
 	bp.Payload = payload
 	pay_len := uint32(len(payload))
 	// 4 bytes for packet length (uint32)
 	// 1 for padding length (uint8)
-	// 4 minimum for padding
-	curr := pay_len + 4 + 1 + 4
-	if curr % 16 == 0 {
-		bp.Padding_Length = 4
+	curr := pay_len + 4 + 1 
+	if curr%16 == 0 {
+		bp.Padding_Length = 16 // 4 byte minimum padding
 	} else {
 		bp.Padding_Length = uint8(16 - (curr % 16))
 		if bp.Padding_Length < 4 {
@@ -58,8 +60,31 @@ func CreateBinPacket(payload []byte, mac []byte) *BinaryPacket {
 	}
 	bp.Padding = GenerateRandomPadding(bp.Padding_Length)
 	bp.Packet_Length = uint32(bp.Padding_Length) + pay_len + 1
-	bp.MAC = mac
 	return bp
+}
+
+func (ebp *EncryptedBinaryPacket) Marshall() []byte {
+	b := new(bytes.Buffer)
+	c_len := uint32(len(ebp.Ciphertext))
+	binary.Write(b, binary.BigEndian, c_len)
+	b.Write(ebp.Ciphertext)
+	mac_len := uint32(len(ebp.MAC))
+	binary.Write(b, binary.BigEndian, mac_len)
+	b.Write(ebp.MAC)
+	return b.Bytes()
+}
+
+func UnmarshallEncryptedBinaryPacket(b []byte) (*EncryptedBinaryPacket, error) {
+	var curr uint32 = 0
+	ebp := &EncryptedBinaryPacket{}
+	c_len := binary.BigEndian.Uint32(b[curr : curr+4])
+	curr += 4
+	ebp.Ciphertext = b[curr : curr+c_len]
+	curr += uint32(len(ebp.Ciphertext))
+	mac_len := binary.BigEndian.Uint32(b[curr : curr+4])
+	curr += 4
+	ebp.MAC = b[curr : curr+mac_len]
+	return ebp, nil
 }
 
 func (bp *BinaryPacket) Marshall() []byte {
@@ -68,7 +93,6 @@ func (bp *BinaryPacket) Marshall() []byte {
 	binary.Write(b, binary.BigEndian, bp.Padding_Length)
 	b.Write(bp.Payload)
 	b.Write(bp.Padding)
-	b.Write(bp.MAC)
 	return b.Bytes()
 }
 
@@ -78,15 +102,14 @@ func (bp *BinaryPacket) Marshall() []byte {
 func UnmarshallBinaryPacket(b []byte) (*BinaryPacket, error) {
 	var curr uint32 = 0
 	bp := &BinaryPacket{}
-	bp.Packet_Length = binary.BigEndian.Uint32(b[curr:curr+4])
+	bp.Packet_Length = binary.BigEndian.Uint32(b[curr : curr+4])
 	curr += 4
 	bp.Padding_Length = b[curr]
 	curr += 1
 	pay_len := bp.Packet_Length - uint32(bp.Padding_Length) - 1
-	bp.Payload = b[curr:curr + pay_len]
+	bp.Payload = b[curr : curr+pay_len]
 	curr += uint32(len(bp.Payload))
-	bp.Padding = b[curr:curr + uint32(bp.Padding_Length)]
+	bp.Padding = b[curr : curr+uint32(bp.Padding_Length)]
 	curr += uint32(len(bp.Padding))
-	bp.MAC = b[curr:curr + util.MAC_LENGTH]
 	return bp, nil
 }

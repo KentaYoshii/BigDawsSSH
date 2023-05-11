@@ -10,10 +10,8 @@ import (
 	"ssh/util"
 	"crypto/hmac"
 	"crypto/sha1"
-	// "crypto/aes"
-	// "crypto/cipher"
-	// "crypto/rand"
-	// "encoding/base64"
+	"crypto/aes"
+	"crypto/cipher"
 )
 
 // Message that gets exchanged between client and server upon connection
@@ -504,57 +502,61 @@ func ComputeMAC(bp *BinaryPacket, seqN uint32, macK []byte) ([]byte, error) {
 }
 
 // Function that verifies the MAC of a BinaryPacket
-func VerifyMAC(bp *BinaryPacket, seqN uint32, macK []byte) bool {
+func VerifyMAC(bp *BinaryPacket, seqN uint32, macK []byte, checkMAC []byte) bool {
 	mac, err := ComputeMAC(bp, seqN, macK)
 	if err != nil {
 		fmt.Println("error computing MAC:", err.Error())
 		return false
 	}
-	return hmac.Equal(mac, bp.MAC)
+	return hmac.Equal(mac, checkMAC)
 }
 
 // When encryption is in effect, the packet length, padding
 // length, payload, and padding fields of each packet MUST be encrypted
 // with the given algorithm.
-// func EncryptMessage(key []byte, message string) (string, error) {
-// 	byteMsg := []byte(message)
-// 	block, err := aes.NewCipher(key)
-// 	if err != nil {
-// 		return "", fmt.Errorf("could not create new cipher: %v", err)
-// 	}
+func EncryptPacket(unencryptedBP *BinaryPacket, encK, startIV []byte) (ciphertext []byte, err error) {
+	// first marshall the unencryptedBP (packet length, padding length, payload, padding)
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.BigEndian, unencryptedBP.Packet_Length)
+	binary.Write(buf, binary.BigEndian, unencryptedBP.Padding_Length)
+	buf.Write(unencryptedBP.Payload)
+	buf.Write(unencryptedBP.Padding)
+	b := buf.Bytes()
+	if len(b) % 16 != 0 {
+		fmt.Println("error: unencrypted packet length is not a multiple of 16")
+		return nil, errors.New("error: unencrypted packet length is not a multiple of 16")
+	}
 
-// 	cipherText := make([]byte, aes.BlockSize+len(byteMsg))
-// 	iv := cipherText[:aes.BlockSize]
-// 	if _, err = io.ReadFull(rand.Reader, iv); err != nil {
-// 		return "", fmt.Errorf("could not encrypt: %v", err)
-// 	}
+	ciphertext = make([]byte, len(b))
 
-// 	stream := cipher.NewCFBEncrypter(block, iv)
-// 	stream.XORKeyStream(cipherText[aes.BlockSize:], byteMsg)
+	// encrypt the packet
+	block, err := aes.NewCipher(encK)
+	if err != nil {
+		fmt.Println("error creating cipher:", err.Error())
+		return nil, err
+	}
+	enc := cipher.NewCBCEncrypter(block, startIV)
+	enc.CryptBlocks(ciphertext, b)
 
-// 	return base64.StdEncoding.EncodeToString(cipherText), nil
-// }
+	return ciphertext, nil
+}
 
-// func DecryptMessage(key []byte, message string) (string, error) {
-// 	cipherText, err := base64.StdEncoding.DecodeString(message)
-// 	if err != nil {
-// 		return "", fmt.Errorf("could not base64 decode: %v", err)
-// 	}
+func DecryptPacket(ciphertext, encK, startIV []byte) (plaintext []byte, err error) {
+	if len(ciphertext) % 16 != 0 {
+		fmt.Println("error: ciphertext length is not a multiple of 16")
+		return nil, errors.New("error: ciphertext length is not a multiple of 16")
+	}
 
-// 	block, err := aes.NewCipher(key)
-// 	if err != nil {
-// 		return "", fmt.Errorf("could not create new cipher: %v", err)
-// 	}
+	plaintext = make([]byte, len(ciphertext))
 
-// 	if len(cipherText) < aes.BlockSize {
-// 		return "", fmt.Errorf("invalid ciphertext block size")
-// 	}
+	// decrypt the packet
+	block, err := aes.NewCipher(encK)
+	if err != nil {
+		fmt.Println("error creating cipher:", err.Error())
+		return nil, err
+	}
+	dec := cipher.NewCBCDecrypter(block, startIV)
+	dec.CryptBlocks(plaintext, ciphertext)
 
-// 	iv := cipherText[:aes.BlockSize]
-// 	cipherText = cipherText[aes.BlockSize:]
-
-// 	stream := cipher.NewCFBDecrypter(block, iv)
-// 	stream.XORKeyStream(cipherText, cipherText)
-
-// 	return string(cipherText), nil
-// }
+	return plaintext, nil
+}	

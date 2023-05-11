@@ -310,7 +310,7 @@ func DH_KEX_Server(conn *net.TCPConn, group int,
 
 	b := response.Marshall()
 
-	binPacket = CreateBinPacket(b, nil)
+	binPacket = CreateBinPacket(b)
 	b = binPacket.Marshall()
 
 	_, err = conn.Write(b)
@@ -346,7 +346,7 @@ func DH_KEX_Client(conn *net.TCPConn, group int,
 
 	b := initMsg.Marshall()
 
-	binPacket := CreateBinPacket(b, nil)
+	binPacket := CreateBinPacket(b)
 	b = binPacket.Marshall()
 
 	_, err := conn.Write(b)
@@ -525,9 +525,6 @@ func GenerateNewKeys(shared_secret *dh.DHKey, exchange_hash, session_id []byte, 
 		enc_key_s2c = append(enc_key_s2c, k2...)[:32]
 	}
 
-	fmt.Println(iv_c2s)
-	fmt.Println(enc_key_c2s)
-
 	return &NewKeys{
 		IV_C2S:     iv_c2s,
 		IV_S2C:     iv_s2c,
@@ -542,7 +539,7 @@ func ServerSendRecvNewKeyMessage(conn *net.TCPConn, priKey *dsa.PrivateKey) bool
 	new_key_msg := CreateNewKeysMessage()
 	msg_b := new_key_msg.Marshall()
 	sig := SignServerDSA(msg_b, priKey)
-	binPacket := CreateBinPacket(sig, nil)
+	binPacket := CreateBinPacket(sig)
 	b := binPacket.Marshall()
 	_, err := conn.Write(b)
 	if err != nil {
@@ -577,7 +574,7 @@ func ServerSendRecvNewKeyMessage(conn *net.TCPConn, priKey *dsa.PrivateKey) bool
 func ClientSendRecvNewKeyMessage(conn *net.TCPConn, pubKey *dsa.PublicKey) bool {
 	new_key_msg := CreateNewKeysMessage()
 	msg_b := new_key_msg.Marshall()
-	binPacket := CreateBinPacket(msg_b, nil)
+	binPacket := CreateBinPacket(msg_b)
 	b := binPacket.Marshall()
 	_, err := conn.Write(b)
 	if err != nil {

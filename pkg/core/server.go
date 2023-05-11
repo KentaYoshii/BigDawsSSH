@@ -120,7 +120,7 @@ func ExchangeNegotiationMessage(si *info.ServerInfo, ci *info.ServerClientInfo) 
 	b = proto.SignServerDSA(b, si.DSAPrivKey)
 
 	// Binary Packet Protocol
-	binPacket := proto.CreateBinPacket(b, nil)
+	binPacket := proto.CreateBinPacket(b)
 	b = binPacket.Marshall()
 	_, err := ci.Conn.Write(b)
 	if err != nil {
@@ -169,9 +169,14 @@ func ExchangeServiceMessage(si *info.ServerInfo, ci *info.ServerClientInfo) bool
 		fmt.Println("Error receiving service request message:", err.Error())
 		return false
 	}
-
-	binPacket, _ := proto.UnmarshallBinaryPacket(b)
-	suc := proto.VerifyMAC(binPacket, ci.ClientSeqNum, ci.Keys.IntKey_C2S)
+	recvEncryptedPacket, _ := proto.UnmarshallEncryptedBinaryPacket(b) 
+	plaintext, err := proto.DecryptPacket(recvEncryptedPacket.Ciphertext, ci.Keys.EncKey_C2S, ci.Keys.IV_C2S)
+	if err != nil {
+		fmt.Println("Error decrypting packet:", err.Error())
+		return false
+	}
+	binPacket, _ := proto.UnmarshallBinaryPacket(plaintext)
+	suc := proto.VerifyMAC(binPacket, ci.ClientSeqNum, ci.Keys.IntKey_C2S, recvEncryptedPacket.MAC)
 	if !suc {
 		fmt.Println("MAC verification failed")
 		return false
@@ -197,14 +202,22 @@ func ExchangeServiceMessage(si *info.ServerInfo, ci *info.ServerClientInfo) bool
 	}
 
 	b = sam.Marshall()
-	binPacket = proto.CreateBinPacket(b, nil)
+	binPacket = proto.CreateBinPacket(b)
 	mac, err := proto.ComputeMAC(binPacket, ci.ServerSeqNum, ci.Keys.IntKey_S2C)
 	if err != nil {
 		fmt.Println("Error computing MAC:", err.Error())
 		return false
 	}
-	binPacket.MAC = mac
-	b = binPacket.Marshall()
+	ciphertext, err := proto.EncryptPacket(binPacket, ci.Keys.EncKey_S2C, ci.Keys.IV_S2C)
+	if err != nil {
+		fmt.Println("Error encrypting packet:", err.Error())
+		return false
+	}
+	encryptedPacket := &proto.EncryptedBinaryPacket{
+		Ciphertext: ciphertext,
+		MAC:        mac,
+	}
+	b = encryptedPacket.Marshall()
 	_, err = ci.Conn.Write(b)
 	if err != nil {
 		fmt.Println("Error sending service accept message:", err.Error())
@@ -245,8 +258,8 @@ func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {
 
 	k, exh, suc := proto.Do_KEX_Server(si.ClientsAlgorithms[ci.ID].Kex_algorithm)(ci.Conn, group,
 		si.PVM, ci.PVM, si.KInitMSG, ci.ClientKInitMSG,
-		si.DSAPubKey, si.DSAPrivKey) 
-	
+		si.DSAPubKey, si.DSAPrivKey)
+
 	if !suc {
 		fmt.Println("Key exchange failed")
 		// close connection
@@ -263,12 +276,11 @@ func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {
 
 	fmt.Println("Key exchange successful with client", ci.ID)
 
-
 	newKs := proto.GenerateNewKeys(k, exh, ci.SessionIdentifier, si.ClientsAlgorithms[ci.ID].Encryption_algorithm)
 	ci.Keys = newKs
 
 	fmt.Println("New keys generated for client", ci.ID)
-	
+
 	// send New Key Message to client
 	if !proto.ServerSendRecvNewKeyMessage(ci.Conn, si.DSAPrivKey) {
 		fmt.Println("Error sending New Key Message to client", ci.ID)
