@@ -2,7 +2,7 @@ name,p1,p2,p3
 kex_algorithms,diffie-hellman-group1-sha1,diffie-hellman-group14-sha1,
 server_host_key_algorithms,ssh-dss,,
 encryption_algorithms_server_to_client,aes128-cbc,aes256-cbc,3des-cbc
-mac_algorithms_server_to_client,hmac-sha1,,
+mac_algorithms_server_to_client,hmac-sha1,hmac-sha1-96,
 compression_algorithms_server_to_client,none,,
 languages_server_to_client,none,,
 first_kex_packet_follows,false,,

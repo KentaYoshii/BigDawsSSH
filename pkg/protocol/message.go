@@ -497,6 +497,9 @@ func ComputeMAC(bp *BinaryPacket, seqN uint32, macK []byte, mac_algo string) ([]
 		return nil, err
 	}
 	msgMac := mac.Sum(nil)
+	if mac_algo == "hmac-sha1-96" {
+		return msgMac[:12], nil // truncate to 96 bits
+	}
 	return msgMac, nil
 }
 

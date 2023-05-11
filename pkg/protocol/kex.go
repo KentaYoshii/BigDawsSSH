@@ -475,6 +475,7 @@ func GenerateNewKeys(shared_secret *dh.DHKey, exchange_hash, session_id []byte, 
 
 	enc_key_s2c := h.Sum(nil)
 
+	// HMACSHA1 keys can be of any length
 	// Integrity key client to server: HASH(K || H || "E" || session_id)
 	h.Reset()
 
