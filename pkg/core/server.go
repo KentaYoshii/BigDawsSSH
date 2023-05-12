@@ -8,6 +8,7 @@ import (
 	info "ssh/pkg/info"
 	proto "ssh/pkg/protocol"
 	"ssh/util"
+	"strings"
 )
 
 func CreateNewListener(service string) *net.TCPListener {
@@ -394,9 +395,47 @@ retry:
 			fmt.Println("Client", ci.ID, "authenticated successfully")
 			return true
 		}
+	} else if method == "password" {
+		pw_req, _ := proto.UnmarshallPW_UserAuthRequest(buf)
+		pw := pw_req.Password
+		correct_pw, ok := si.PasswordMap[pw_req.Username]
+		if !ok {
+			fmt.Println("Username", pw_req.Username, "not found")
+			return false
+		}
+		if strings.TrimSpace(pw) != strings.TrimSpace(correct_pw) {
+			fmt.Println("Incorrect password")
+			return false
+		}
+
+		suc := &proto.UserAuthSuccess{
+			MessageType: util.SSH_MSG_USERAUTH_SUCCESS,
+		}
+		b = suc.Marshall()
+		binPacket = proto.CreateBinPacket(b, uint32(ci.BLK_SIZE))
+		encryptedPacket, err := proto.EncryptAndMac(binPacket, ci.Keys.EncKey_S2C,
+			ci.Keys.IntKey_S2C, ci.Keys.IV_S2C, ci.ServerSeqNum,
+			si.ClientsAlgorithms[ci.ID].Encryption_algorithm,
+			si.ClientsAlgorithms[ci.ID].Mac_algorithm)
+		if err != nil {
+			fmt.Println("Error encrypting and macing userauth request message:", err.Error())
+			return false
+		}
+
+		b = encryptedPacket.Marshall()
+		_, err = ci.Conn.Write(b)
+		if err != nil {
+			fmt.Println("Error sending userauth request message:", err.Error())
+			return false
+		}
+
+		ci.ServerSeqNum++
+
+		fmt.Println("Client", ci.ID, "authenticated successfully")
+		return true
 	}
 
-	return true
+	return false
 }
 
 func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {

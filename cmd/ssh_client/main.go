@@ -141,9 +141,19 @@ func main() {
 		}
 
 		fmt.Println("User auth request successful")
-		
+
 	} else if method == "password" {
-		
+		fmt.Printf("Password: ")
+		var password string
+		fmt.Scanf("%s", &password)
+		cci.Password = password
+		// Send User Auth Request
+		if !core.DoPWAuth(cci, csi) {
+			fmt.Println("User auth request failed")
+			os.Exit(1)
+		}
+
+		fmt.Println("User auth request successful")
 	} else {
 		fmt.Println("Invalid method")
 		os.Exit(1)

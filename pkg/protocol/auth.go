@@ -10,6 +10,15 @@ import (
 	"crypto/rand"
 )
 
+
+type PW_UserAuthRequest struct {
+	MessageType uint8
+	Username    string
+	ServiceName string
+	Method      string
+	Direct      bool
+	Password    string
+}
 type PK_UserAuthRequest struct {
 	MessageType uint8
 	Username    string
@@ -45,6 +54,39 @@ type UserAuthFailure struct {
 
 type UserAuthSuccess struct {
 	MessageType uint8
+}
+
+// ------------------ PW_UserAuthRequest ------------------
+func (p *PW_UserAuthRequest) Marshall() []byte {
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.BigEndian, p.MessageType)
+	binary.Write(buf, binary.BigEndian, uint32(len(p.Username)))
+	buf.Write([]byte(p.Username))
+	binary.Write(buf, binary.BigEndian, uint32(len(p.ServiceName)))
+	buf.Write([]byte(p.ServiceName))
+	binary.Write(buf, binary.BigEndian, uint32(len(p.Method)))
+	buf.Write([]byte(p.Method))
+	binary.Write(buf, binary.BigEndian, p.Direct)
+	binary.Write(buf, binary.BigEndian, uint32(len(p.Password)))
+	buf.Write([]byte(p.Password))
+	return buf.Bytes()
+}
+
+func UnmarshallPW_UserAuthRequest(b []byte) (*PW_UserAuthRequest, error) {
+	p := new(PW_UserAuthRequest)
+	buf := bytes.NewBuffer(b)
+	binary.Read(buf, binary.BigEndian, &p.MessageType)
+	var len uint32
+	binary.Read(buf, binary.BigEndian, &len)
+	p.Username = string(buf.Next(int(len)))
+	binary.Read(buf, binary.BigEndian, &len)
+	p.ServiceName = string(buf.Next(int(len)))
+	binary.Read(buf, binary.BigEndian, &len)
+	p.Method = string(buf.Next(int(len)))
+	binary.Read(buf, binary.BigEndian, &p.Direct)
+	binary.Read(buf, binary.BigEndian, &len)
+	p.Password = string(buf.Next(int(len)))
+	return p, nil
 }
 
 // ------------------ PK_UserAuthRequest ------------------

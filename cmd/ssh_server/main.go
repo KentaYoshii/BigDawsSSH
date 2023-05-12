@@ -28,6 +28,9 @@ func main() {
 	// Set up Server acceptable algorithm lists
 	info.LoadServerNameList(serverInfo)
 
+	// Set up password list
+	info.LoadUserPassWord(serverInfo)
+
 	// Load DSA keys
 	info.LoadDSAKeys(serverInfo)
 

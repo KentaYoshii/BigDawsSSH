@@ -269,6 +269,56 @@ func QueryServerPKAuth(cci *info.ClientClientInfo, csi *info.ClientServerInfo) b
 	return true
 }
 
+func DoPWAuth(cci *info.ClientClientInfo, csi *info.ClientServerInfo) bool {
+	pw_req := &proto.PW_UserAuthRequest{
+		MessageType: util.SSH_MSG_USERAUTH_REQUEST,
+		Username:    cci.Username,
+		ServiceName: "ssh-connection",
+		Method:      "password",
+		Direct:      false,
+		Password:    cci.Password,
+	}
+
+	msg_b := pw_req.Marshall()
+	binPacket := proto.CreateBinPacket(msg_b, uint32(csi.BLK_SIZE))
+	encryptedPacket, err := proto.EncryptAndMac(binPacket, csi.Keys.EncKey_C2S,
+		csi.Keys.IntKey_C2S, csi.Keys.IV_C2S, csi.ClientSeqNum,
+		csi.AgreedAlgorithm.Encryption_algorithm, csi.AgreedAlgorithm.Mac_algorithm)
+	if err != nil {
+		fmt.Println("Encrypt and mac failed")
+		return false
+	}
+	b := encryptedPacket.Marshall()
+	_, err = csi.ServerConn.Write(b)
+	if err != nil {
+		fmt.Println("Write to server failed:", err.Error())
+		return false
+	}
+
+	csi.ClientSeqNum++
+
+	// read server's response
+	buf := make([]byte, util.MAX_PACKET_SIZE)
+	_, err = csi.ServerConn.Read(buf)
+	if err != nil {
+		fmt.Println("Read from server failed:", err.Error())
+		return false
+	}
+	encryptedPacket, _ = proto.UnmarshallEncryptedBinaryPacket(buf)
+	binPacket, err = proto.DecryptAndVerify(encryptedPacket, csi.Keys.EncKey_S2C,
+		csi.Keys.IntKey_S2C, csi.Keys.IV_S2C, csi.ServerSeqNum,
+		csi.AgreedAlgorithm.Encryption_algorithm, csi.AgreedAlgorithm.Mac_algorithm)
+	if err != nil {
+		fmt.Println("Decrypt and verify failed")
+		return false
+	}
+
+	payload := binPacket.Payload
+	m_type := payload[0]
+
+	return m_type == util.SSH_MSG_USERAUTH_SUCCESS
+}
+
 func DoPKAuth(cci *info.ClientClientInfo, csi *info.ClientServerInfo, sig []byte) bool {
 	// send signature
 	userauthRequest := &proto.PK_UserAuthRequestWithSignature{

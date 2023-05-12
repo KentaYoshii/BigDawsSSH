@@ -72,6 +72,7 @@ type ServerInfo struct {
 	Users []string
 	Services []string
 	AuthMethods []string
+	PasswordMap map[string]string // username -> password
 }
 
 func CreateNewServerInfo(hostname string, port string, listenerConn *net.TCPListener) *ServerInfo {
@@ -90,6 +91,7 @@ func CreateNewServerInfo(hostname string, port string, listenerConn *net.TCPList
 		Users:			   []string{"client", "client2", "client3"},
 		Services:		   []string{"ssh-connection"},
 		AuthMethods:	   []string{"publickey", "password"},
+		PasswordMap:	   make(map[string]string),
 	}
 }
 
@@ -121,6 +123,37 @@ func LoadServerDSAPubKey(csi *ClientServerInfo) {
 	}
 
 	csi.ServerDSAPubKey = pubKey
+}
+
+func LoadUserPassWord(si *ServerInfo) {
+	file, err := os.Open("./data/password/password.csv")
+	if err != nil {
+		fmt.Println("Error opening server password list:", err.Error())
+		os.Exit(1)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+
+	for idx := 0; idx < len(si.Users) + 1; idx++ {
+		if idx == 0 {
+			// skip first line (header)
+			_, err := reader.Read()
+			if err != nil {
+				fmt.Println("Error reading server password list:", err.Error())
+				os.Exit(1)
+			}
+			continue
+		}
+
+		record, err := reader.Read()
+		if err != nil {
+			fmt.Println("Error reading server password list:", err.Error())
+			os.Exit(1)
+		}
+
+		si.PasswordMap[record[0]] = record[1]
+	}
 }
 
 // Function that loads the csv file that contains the list of supported algorithms

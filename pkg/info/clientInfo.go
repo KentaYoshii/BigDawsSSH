@@ -1,12 +1,13 @@
 package info
 
 import (
+	"crypto/rsa"
 	"encoding/csv"
 	"fmt"
 	"net"
 	"os"
 	proto "ssh/pkg/protocol"
-	"crypto/rsa"
+
 	dh "github.com/monnand/dhkx"
 )
 
@@ -48,11 +49,13 @@ type ClientClientInfo struct {
 	ClientPVM      *proto.ProtocolVersionMessage
 
 	// authentification
-	Username string
-	RSAPrivateKey *rsa.PrivateKey
-	RSAPublicKey *rsa.PublicKey
+	Username           string
+	RSAPrivateKey      *rsa.PrivateKey
+	RSAPublicKey       *rsa.PublicKey
 	RSAPrivateKeyBytes []byte
-	RSAPublicKeyBytes []byte
+	RSAPublicKeyBytes  []byte
+
+	Password string
 }
 
 func CreateNewClientInfo(id int, address string, conn *net.TCPConn) *ServerClientInfo {
