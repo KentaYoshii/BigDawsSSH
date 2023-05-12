@@ -6,7 +6,7 @@ import (
 	"net"
 	"os"
 	proto "ssh/pkg/protocol"
-
+	"crypto/rsa"
 	dh "github.com/monnand/dhkx"
 )
 
@@ -46,6 +46,11 @@ type ClientClientInfo struct {
 
 	ClientKInitMSG []byte
 	ClientPVM      *proto.ProtocolVersionMessage
+
+	// authentification
+	Username string
+	RSAPrivateKey *rsa.PrivateKey
+	RSAPublicKey *rsa.PublicKey
 }
 
 func CreateNewClientInfo(id int, address string, conn *net.TCPConn) *ServerClientInfo {

@@ -8,25 +8,26 @@ import (
 	"os"
 	protocol "ssh/pkg/protocol"
 	"sync"
+
 	dh "github.com/monnand/dhkx"
 )
 
 type ClientServerInfo struct {
 	// Client use
-	ServerDSAPubKey *dsa.PublicKey
-	ServerConn      *net.TCPConn
-	AgreedAlgorithm *protocol.AgreedNegotiation
-	PVM             *protocol.ProtocolVersionMessage
-	KInitMSG		[]byte
-	SharedSecret  	*dh.DHKey
-	ExchangeHash  	[]byte
+	ServerDSAPubKey   *dsa.PublicKey
+	ServerConn        *net.TCPConn
+	AgreedAlgorithm   *protocol.AgreedNegotiation
+	PVM               *protocol.ProtocolVersionMessage
+	KInitMSG          []byte
+	SharedSecret      *dh.DHKey
+	ExchangeHash      []byte
 	SessionIdentifier []byte // Identifier for this session set to the first hash output of the KEX. IMMUTABLE
-	Keys 			*protocol.NewKeys
+	Keys              *protocol.NewKeys
 
-	ServerSeqNum 	uint32
-	ClientSeqNum 	uint32
+	ServerSeqNum uint32
+	ClientSeqNum uint32
 
-	BLK_SIZE        uint8
+	BLK_SIZE uint8
 }
 
 type ServerInfo struct {
@@ -66,6 +67,11 @@ type ServerInfo struct {
 	Compression_algorithms_server_to_client []string
 	Languages_server_to_client              []string
 	First_kex_packet_follows                bool
+
+	// Authenticatable users
+	Users []string
+	Services []string
+	AuthMethods []string
 }
 
 func CreateNewServerInfo(hostname string, port string, listenerConn *net.TCPListener) *ServerInfo {
@@ -81,6 +87,9 @@ func CreateNewServerInfo(hostname string, port string, listenerConn *net.TCPList
 		ClientsMutex:      &sync.Mutex{},
 		ClientWg:          &sync.WaitGroup{},
 		PVM:               protocol.CreateProtocolVersionMessage(),
+		Users:			   []string{"client", "client2", "client3"},
+		Services:		   []string{"ssh-connection"},
+		AuthMethods:	   []string{"publickey", "password"},
 	}
 }
 

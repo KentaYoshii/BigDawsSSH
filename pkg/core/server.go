@@ -1,6 +1,7 @@
 package connection
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net"
 	"os"
@@ -127,7 +128,7 @@ func ExchangeNegotiationMessage(si *info.ServerInfo, ci *info.ServerClientInfo) 
 		fmt.Println("Error sending algorithm negotiation message:", err.Error())
 		return false
 	}
-	retry:
+retry:
 	// receive client's algorithm negotiation message
 	b = make([]byte, util.MAX_PACKET_SIZE)
 	_, err = ci.Conn.Read(b)
@@ -146,7 +147,7 @@ func ExchangeNegotiationMessage(si *info.ServerInfo, ci *info.ServerClientInfo) 
 	} else if m_type == util.SSH_MSG_DISCONNECT {
 		fmt.Println("Received disconnec message")
 		return false
-	} 
+	}
 
 	// unmarshall client's negotiation message
 	canm, len, err := proto.UnmarshallClientNegotiation(b)
@@ -177,7 +178,7 @@ func ExchangeServiceMessage(si *info.ServerInfo, ci *info.ServerClientInfo) bool
 	mac_algo := si.ClientsAlgorithms[ci.ID].Mac_algorithm
 
 	// read service request message
-	retry:
+retry:
 	b := make([]byte, util.MAX_PACKET_SIZE)
 	_, err := ci.Conn.Read(b)
 	if err != nil {
@@ -199,8 +200,8 @@ func ExchangeServiceMessage(si *info.ServerInfo, ci *info.ServerClientInfo) bool
 	} else if m_type == util.SSH_MSG_DISCONNECT {
 		fmt.Println("Received disconnec message")
 		return false
-	} 
-	
+	}
+
 	ci.ClientSeqNum++
 	reqMsg := proto.UnmarshallServiceRequest(b)
 
@@ -221,7 +222,7 @@ func ExchangeServiceMessage(si *info.ServerInfo, ci *info.ServerClientInfo) bool
 
 	b = sam.Marshall()
 	binPacket = proto.CreateBinPacket(b, uint32(ci.BLK_SIZE))
-	encryptedPacket, err := proto.EncryptAndMac(binPacket, ci.Keys.EncKey_S2C, 
+	encryptedPacket, err := proto.EncryptAndMac(binPacket, ci.Keys.EncKey_S2C,
 		ci.Keys.IntKey_S2C, ci.Keys.IV_S2C, ci.ServerSeqNum, enc_algo, mac_algo)
 	if err != nil {
 		fmt.Println("Error encrypting and macing service accept message:", err.Error())
@@ -236,6 +237,131 @@ func ExchangeServiceMessage(si *info.ServerInfo, ci *info.ServerClientInfo) bool
 	}
 
 	ci.ServerSeqNum++
+
+	return true
+}
+
+func VerifyAuthRequest(si *info.ServerInfo, ci *info.ServerClientInfo, packetBytes []byte) (string, bool, bool) {
+	curr := 1
+	// get user name (uint32)
+	username_len := binary.BigEndian.Uint32(packetBytes[curr : curr+4])
+	curr += 4
+	username := string(packetBytes[curr : curr+int(username_len)])
+	for idx, user := range si.Users {
+		if user == username {
+			break
+		}
+		if idx == len(si.Users)-1 {
+			fmt.Println("User not found")
+			return "", false, false
+		}
+	}
+	curr += int(username_len)
+
+	// get service name (uint32)
+	service_len := binary.BigEndian.Uint32(packetBytes[curr : curr+4])
+	curr += 4
+	service := string(packetBytes[curr : curr+int(service_len)])
+	for idx, serv := range si.Services {
+		if serv == service {
+			break
+		}
+		if idx == len(si.Services)-1 {
+			fmt.Println("Service not found")
+			return "", false, false
+		}
+	}
+	curr += int(service_len)
+
+	// get method name (uint32)
+	method_len := binary.BigEndian.Uint32(packetBytes[curr : curr+4])
+	curr += 4
+	method := string(packetBytes[curr : curr+int(method_len)])
+	for idx, meth := range si.AuthMethods {
+		if meth == method {
+			break
+		}
+		if idx == len(si.AuthMethods)-1 {
+			fmt.Println("Method not found")
+			return "", false, false
+		}
+	}
+	curr += int(method_len)
+
+	// get boolean (uint8)
+	direct := packetBytes[curr]
+
+	return method, direct == 1, true
+}
+
+func AuthenticateUser(si *info.ServerInfo, ci *info.ServerClientInfo) bool {
+retry:
+	// read userauth request message
+	buf := make([]byte, util.MAX_PACKET_SIZE)
+	_, err := ci.Conn.Read(buf)
+	if err != nil {
+		fmt.Println("Error receiving userauth request message:", err.Error())
+		return false
+	}
+	recvEncryptedPacket, _ := proto.UnmarshallEncryptedBinaryPacket(buf)
+	binPacket, err := proto.DecryptAndVerify(recvEncryptedPacket, ci.Keys.EncKey_C2S,
+		ci.Keys.IntKey_C2S, ci.Keys.IV_C2S, ci.ClientSeqNum,
+		si.ClientsAlgorithms[ci.ID].Encryption_algorithm,
+		si.ClientsAlgorithms[ci.ID].Mac_algorithm)
+	if err != nil {
+		fmt.Println("Error decrypting and verifying userauth request message:", err.Error())
+		return false
+	}
+	ci.ClientSeqNum++
+
+	buf = binPacket.Payload
+	m_type := buf[0]
+	if m_type != util.SSH_MSG_USERAUTH_REQUEST {
+		fmt.Println("Message type not SSH_MSG_USERAUTH_REQUEST")
+		return false
+	}
+
+	// check username, method, and service
+	method, direct, ok := VerifyAuthRequest(si, ci, buf)
+	if !ok {
+		return false
+	}
+	var b []byte
+	if method == "publickey" {
+		// user wants to know if public key authentication is allowed
+		// send pk ok
+		if !direct {
+			pkreq, _ := proto.UnmarshallPK_UserAuthRequest(buf)
+			pkok := &proto.PK_UserAuthOk{
+				MessageType: util.SSH_MSG_USERAUTH_PK_OK,
+				PKAlgorithm: pkreq.PKAlgorithm,
+				PKBlob:      pkreq.PKBlob,
+			}
+			b = pkok.Marshall()
+			binPacket = proto.CreateBinPacket(b, uint32(ci.BLK_SIZE))
+			encryptedPacket, err := proto.EncryptAndMac(binPacket, ci.Keys.EncKey_S2C,
+				ci.Keys.IntKey_S2C, ci.Keys.IV_S2C, ci.ServerSeqNum,
+				si.ClientsAlgorithms[ci.ID].Encryption_algorithm,
+				si.ClientsAlgorithms[ci.ID].Mac_algorithm)
+			if err != nil {
+				fmt.Println("Error encrypting and macing userauth request message:", err.Error())
+				return false
+			}
+
+			b = encryptedPacket.Marshall()
+			_, err = ci.Conn.Write(b)
+			if err != nil {
+				fmt.Println("Error sending userauth request message:", err.Error())
+				return false
+			}
+
+			ci.ServerSeqNum++
+			fmt.Println("Sent pk ok message to client", ci.ID)
+			goto retry
+		} else {
+			// actual authentication
+		}
+	}
 
 	return true
 }
@@ -315,4 +441,11 @@ func HandleConnection(si *info.ServerInfo, ci *info.ServerClientInfo) {
 
 	fmt.Println("Service request exchange successful with client", ci.ID)
 
+	// do user authentication
+	if !AuthenticateUser(si, ci) {
+		fmt.Println("User authentication failed")
+		// close connection
+		ci.Conn.Close()
+		return
+	}
 }

@@ -65,7 +65,7 @@ func main() {
 	k, exh, suc := proto.Do_KEX_Client(csi.AgreedAlgorithm.Kex_algorithm)(csi.ServerConn,
 		group, csi.PVM, cci.ClientPVM, csi.KInitMSG, cci.ClientKInitMSG,
 		csi.ServerDSAPubKey)
-	
+
 	if !suc {
 		fmt.Println("Key exchange failed")
 		os.Exit(1)
@@ -100,5 +100,38 @@ func main() {
 	}
 
 	fmt.Println("Service request successful")
-	
+
+	retry:
+	// Method
+	fmt.Printf("Method: ")
+	var method string
+	fmt.Scanf("%s", &method)
+	// Send User Auth Request
+	fmt.Printf("Username: ")
+	var username string
+	fmt.Scanf("%s", &username)
+	cci.Username = username
+
+	if method == "publickey" {
+		// Load my rsa keys
+		pubFP, priFP := util.GetRSAFilePath(username)
+		privKeyPem := proto.ReadKeyFromFile(priFP)
+		cci.RSAPrivateKey = proto.ExportPEMStrToPrivKey(privKeyPem)
+		pubKeyPem := proto.ReadKeyFromFile(pubFP)
+		cci.RSAPublicKey = proto.ExportPEMStrToPubKey(pubKeyPem)
+		res := core.QueryServerPKAuth(cci, csi)
+		if res {
+			fmt.Println("Server supports public key authentication")
+		} else {
+			fmt.Println("Server does not support public key authentication")
+			fmt.Println("Select another method")
+			goto retry
+		}
+	} else if method == "password" {
+		
+	} else {
+		fmt.Println("Invalid method")
+		os.Exit(1)
+	}
+
 }
