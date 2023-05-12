@@ -51,6 +51,8 @@ type ClientClientInfo struct {
 	Username string
 	RSAPrivateKey *rsa.PrivateKey
 	RSAPublicKey *rsa.PublicKey
+	RSAPrivateKeyBytes []byte
+	RSAPublicKeyBytes []byte
 }
 
 func CreateNewClientInfo(id int, address string, conn *net.TCPConn) *ServerClientInfo {

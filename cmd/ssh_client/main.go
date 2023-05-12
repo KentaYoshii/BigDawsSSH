@@ -117,8 +117,10 @@ func main() {
 		pubFP, priFP := util.GetRSAFilePath(username)
 		privKeyPem := proto.ReadKeyFromFile(priFP)
 		cci.RSAPrivateKey = proto.ExportPEMStrToPrivKey(privKeyPem)
+		cci.RSAPrivateKeyBytes = privKeyPem
 		pubKeyPem := proto.ReadKeyFromFile(pubFP)
 		cci.RSAPublicKey = proto.ExportPEMStrToPubKey(pubKeyPem)
+		cci.RSAPublicKeyBytes = pubKeyPem
 		res := core.QueryServerPKAuth(cci, csi)
 		if res {
 			fmt.Println("Server supports public key authentication")
@@ -127,6 +129,19 @@ func main() {
 			fmt.Println("Select another method")
 			goto retry
 		}
+
+		// Compute Signature with my private key
+		sig := proto.ComputePKSignature(csi.SessionIdentifier, cci.Username, "ssh-connection",
+			"ssh-rsa", pubKeyPem, cci.RSAPrivateKey)
+		
+		// Send User Auth Request
+		if !core.DoPKAuth(cci, csi, sig) {
+			fmt.Println("User auth request failed")
+			os.Exit(1)
+		}
+
+		fmt.Println("User auth request successful")
+		
 	} else if method == "password" {
 		
 	} else {

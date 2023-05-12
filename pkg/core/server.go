@@ -356,10 +356,43 @@ retry:
 			}
 
 			ci.ServerSeqNum++
-			fmt.Println("Sent pk ok message to client", ci.ID)
 			goto retry
 		} else {
 			// actual authentication
+			pk_auth_req, _ := proto.UnmarshallPK_UserAuthRequestWithSignature(buf)
+
+			pubkey_b := pk_auth_req.PKBlob
+			pubkey := proto.ExportPEMStrToPubKey(pubkey_b)
+			if !proto.VerifyPKSignature(ci.SessionIdentifier, pk_auth_req.Username,
+			pk_auth_req.ServiceName, pk_auth_req.PKAlgorithm, pubkey_b, pk_auth_req.Signature, pubkey) {
+				fmt.Println("Error verifying public key signature")
+				return false
+			}
+
+			suc := &proto.UserAuthSuccess{
+				MessageType: util.SSH_MSG_USERAUTH_SUCCESS,
+			}
+			b = suc.Marshall()
+			binPacket = proto.CreateBinPacket(b, uint32(ci.BLK_SIZE))
+			encryptedPacket, err := proto.EncryptAndMac(binPacket, ci.Keys.EncKey_S2C,
+				ci.Keys.IntKey_S2C, ci.Keys.IV_S2C, ci.ServerSeqNum,
+				si.ClientsAlgorithms[ci.ID].Encryption_algorithm,
+				si.ClientsAlgorithms[ci.ID].Mac_algorithm)
+			if err != nil {
+				fmt.Println("Error encrypting and macing userauth request message:", err.Error())
+				return false
+			}
+
+			b = encryptedPacket.Marshall()
+			_, err = ci.Conn.Write(b)
+			if err != nil {
+				fmt.Println("Error sending userauth request message:", err.Error())
+				return false
+			}
+
+			ci.ServerSeqNum++
+			fmt.Println("Client", ci.ID, "authenticated successfully")
+			return true
 		}
 	}
 
